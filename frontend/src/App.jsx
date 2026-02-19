@@ -19,6 +19,9 @@ import Network from './pages/user/Network';
 import Wallet from './pages/user/Wallet';
 import Chat from './pages/user/Chat';
 import AIAssistant from './pages/user/AIAssistant';
+import Upload from './pages/Upload';
+import BrowseContent from './pages/BrowseContent';
+import ContentDetail from './pages/ContentDetail';
 
 // Business Pages
 import BusinessDashboard from './pages/business/BusinessDashboard';
@@ -41,6 +44,9 @@ function App() {
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/music" element={<Music />} />
           <Route path="/games" element={<Games />} />
+	<Route path="/upload" element={<Upload />} />
+	  <Route path="/browse" element={<BrowseContent />} />
+<Route path="/content/:id" element={<ContentDetail />} />
 
           {/* User Routes */}
           <Route path="/dashboard" element={<Dashboard />} />

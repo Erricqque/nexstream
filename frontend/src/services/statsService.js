@@ -106,5 +106,23 @@ export const statsService = {
       console.error('Error fetching admin stats:', error);
       return { totalUsers: 0, totalContent: 0, totalViews: 0, totalRevenue: 0 };
     }
+  },
+
+  // Get channel stats
+  async getChannelStats(channelId) {
+    try {
+      const { data, error } = await supabase
+        .from('content')
+        .select('views_count')
+        .eq('channel_id', channelId);
+      
+      if (error) throw error;
+      
+      const totalViews = data?.reduce((sum, item) => sum + (item.views_count || 0), 0) || 0;
+      return { totalViews, totalContent: data?.length || 0 };
+    } catch (error) {
+      console.error('Error fetching channel stats:', error);
+      return { totalViews: 0, totalContent: 0 };
+    }
   }
 };
