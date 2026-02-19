@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -44,186 +43,495 @@ const Register = () => {
       if (error) throw error;
       navigate('/dashboard');
     } catch (error) {
-      setError(error.message);
+      setError(error.message || 'Failed to create account');
     } finally {
       setLoading(false);
     }
   };
 
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
-
-  const toggleConfirmPasswordVisibility = () => {
-    setShowConfirmPassword(!showConfirmPassword);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center px-4">
-      <div className="bg-gray-800/50 backdrop-blur-xl border border-gray-700 rounded-2xl p-8 w-full max-w-md">
-        <h2 className="text-3xl font-bold text-white mb-6 text-center">Create Account</h2>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px',
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      
+      {/* Animated Background Elements */}
+      <div style={{
+        position: 'absolute',
+        top: '-10%',
+        left: '-10%',
+        width: '500px',
+        height: '500px',
+        background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
+        borderRadius: '50%',
+        animation: 'float 20s infinite ease-in-out'
+      }}></div>
+      
+      <div style={{
+        position: 'absolute',
+        bottom: '-10%',
+        right: '-10%',
+        width: '600px',
+        height: '600px',
+        background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
+        borderRadius: '50%',
+        animation: 'float 25s infinite ease-in-out reverse'
+      }}></div>
+
+      {/* Main Card */}
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '24px',
+        padding: '48px',
+        width: '100%',
+        maxWidth: '480px',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+        position: 'relative',
+        zIndex: 10,
+        animation: 'slideUp 0.6s ease'
+      }}>
         
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{
+            fontSize: '2.5rem',
+            fontWeight: '800',
+            margin: 0,
+            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '-0.5px'
+          }}>
+            NexStream
+          </h1>
+          <p style={{
+            color: '#666',
+            marginTop: '8px',
+            fontSize: '0.95rem'
+          }}>
+            Join the creator economy platform
+          </p>
+        </div>
+
+        {/* Error Message */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
-            <p className="text-red-400 text-sm">{error}</p>
+          <div style={{
+            background: '#fee2e2',
+            border: '1px solid #ef4444',
+            borderRadius: '12px',
+            padding: '14px',
+            marginBottom: '24px',
+            color: '#b91c1c',
+            fontSize: '0.95rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+            {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Full Name</label>
-            <input
-              type="text"
-              name="fullName"
-              value={formData.fullName}
-              onChange={handleChange}
-              required
-              className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-              placeholder="John Doe"
-            />
+        {/* Form */}
+        <form onSubmit={handleSubmit}>
+          {/* Full Name */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              marginBottom: '8px',
+              color: '#333',
+              fontWeight: '500',
+              fontSize: '0.95rem'
+            }}>
+              Full Name
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '1.2rem',
+                color: '#667eea'
+              }}>👤</span>
+              <input
+                type="text"
+                name="fullName"
+                value={formData.fullName}
+                onChange={handleChange}
+                required
+                placeholder="John Doe"
+                style={{
+                  width: '100%',
+                  padding: '16px 16px 16px 48px',
+                  background: '#f8fafc',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '14px',
+                  fontSize: '1rem',
+                  color: '#1a1a1a',
+                  transition: 'all 0.3s',
+                  outline: 'none'
+                }}
+                onFocus={e => e.target.style.borderColor = '#667eea'}
+                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-              placeholder="you@example.com"
-            />
+          {/* Email */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              marginBottom: '8px',
+              color: '#333',
+              fontWeight: '500',
+              fontSize: '0.95rem'
+            }}>
+              Email Address
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '1.2rem',
+                color: '#667eea'
+              }}>✉️</span>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                placeholder="you@example.com"
+                style={{
+                  width: '100%',
+                  padding: '16px 16px 16px 48px',
+                  background: '#f8fafc',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '14px',
+                  fontSize: '1rem',
+                  color: '#1a1a1a',
+                  transition: 'all 0.3s',
+                  outline: 'none'
+                }}
+                onFocus={e => e.target.style.borderColor = '#667eea'}
+                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-            <div className="relative">
+          {/* Password */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              marginBottom: '8px',
+              color: '#333',
+              fontWeight: '500',
+              fontSize: '0.95rem'
+            }}>
+              Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '1.2rem',
+                color: '#667eea'
+              }}>🔒</span>
               <input
                 type={showPassword ? 'text' : 'password'}
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 pr-12"
                 placeholder="••••••••"
+                style={{
+                  width: '100%',
+                  padding: '16px 16px 16px 48px',
+                  background: '#f8fafc',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '14px',
+                  fontSize: '1rem',
+                  color: '#1a1a1a',
+                  transition: 'all 0.3s',
+                  outline: 'none'
+                }}
+                onFocus={e => e.target.style.borderColor = '#667eea'}
+                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
               />
               <button
                 type="button"
-                onClick={togglePasswordVisibility}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-cyan-400"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  color: '#667eea'
+                }}
               >
-                {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                {showPassword ? '👁️' : '👁️‍🗨️'}
               </button>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
-            <div className="relative">
+          {/* Confirm Password */}
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{
+              display: 'block',
+              marginBottom: '8px',
+              color: '#333',
+              fontWeight: '500',
+              fontSize: '0.95rem'
+            }}>
+              Confirm Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '1.2rem',
+                color: '#667eea'
+              }}>🔒</span>
               <input
                 type={showConfirmPassword ? 'text' : 'password'}
                 name="confirmPassword"
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 required
-                className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 pr-12"
                 placeholder="••••••••"
+                style={{
+                  width: '100%',
+                  padding: '16px 16px 16px 48px',
+                  background: '#f8fafc',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '14px',
+                  fontSize: '1rem',
+                  color: '#1a1a1a',
+                  transition: 'all 0.3s',
+                  outline: 'none'
+                }}
+                onFocus={e => e.target.style.borderColor = '#667eea'}
+                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
               />
               <button
                 type="button"
-                onClick={toggleConfirmPasswordVisibility}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-cyan-400"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  color: '#667eea'
+                }}
               >
-                {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
               </button>
             </div>
           </div>
 
+          {/* Terms */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            marginBottom: '24px'
+          }}>
+            <input
+              type="checkbox"
+              id="terms"
+              required
+              style={{
+                width: '18px',
+                height: '18px',
+                cursor: 'pointer',
+                accentColor: '#667eea'
+              }}
+            />
+            <label htmlFor="terms" style={{
+              color: '#666',
+              fontSize: '0.95rem'
+            }}>
+              I agree to the{' '}
+              <a href="#" style={{ color: '#667eea', textDecoration: 'none' }}>Terms of Service</a>
+              {' '}and{' '}
+              <a href="#" style={{ color: '#667eea', textDecoration: 'none' }}>Privacy Policy</a>
+            </label>
+          </div>
+
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg py-3 px-4 font-semibold hover:from-cyan-600 hover:to-blue-700 transition-all duration-300 disabled:opacity-50"
+            style={{
+              width: '100%',
+              padding: '16px',
+              background: 'linear-gradient(135deg, #667eea, #764ba2)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '14px',
+              fontSize: '1.1rem',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
+              transition: 'all 0.3s',
+              boxShadow: '0 10px 20px rgba(102, 126, 234, 0.3)'
+            }}
+            onMouseEnter={e => !loading && (e.target.style.transform = 'translateY(-2px)')}
+            onMouseLeave={e => !loading && (e.target.style.transform = 'translateY(0)')}
           >
             {loading ? (
-              <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                <span style={{
+                  width: '20px',
+                  height: '20px',
+                  border: '3px solid rgba(255,255,255,0.3)',
+                  borderTopColor: 'white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></span>
                 Creating account...
               </span>
-            ) : 'Sign Up'}
+            ) : (
+              'Create Account'
+            )}
           </button>
         </form>
 
-        {/* Social Login Section */}
-        <div className="mt-8">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-700"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-800 text-gray-400">Or sign up with</span>
-            </div>
-          </div>
-
-          <div className="mt-6 grid grid-cols-4 gap-3">
-            {/* Google */}
-            <button 
-              onClick={() => window.location.href = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/authorize?provider=google`}
-              className="w-full flex justify-center py-2 px-4 border border-gray-700 rounded-lg hover:bg-gray-700/50 transition"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-            </button>
-
-            {/* Facebook */}
-            <button 
-              onClick={() => window.location.href = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/authorize?provider=facebook`}
-              className="w-full flex justify-center py-2 px-4 border border-gray-700 rounded-lg hover:bg-gray-700/50 transition"
-            >
-              <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-              </svg>
-            </button>
-
-            {/* Apple */}
-            <button 
-              onClick={() => window.location.href = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/authorize?provider=apple`}
-              className="w-full flex justify-center py-2 px-4 border border-gray-700 rounded-lg hover:bg-gray-700/50 transition"
-            >
-              <svg className="w-5 h-5" fill="white" viewBox="0 0 24 24">
-                <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.008-2.117 3.59-.54 8.905 1.507 11.816 1.008 1.434 2.207 3.038 3.793 2.98 1.52-.05 2.09-.96 3.925-.96 1.831 0 2.35.96 3.96.93 1.635-.03 2.67-1.453 3.664-2.904 1.14-1.648 1.61-3.248 1.64-3.33-.036-.012-3.15-1.188-3.18-4.735-.027-3.113 2.55-4.62 2.67-4.69-1.45-2.11-3.68-2.33-4.45-2.38-1.9-.09-3.46 1.11-4.37 1.11-.91 0-2.32-1.08-3.79-1.05-.2 0-.38.01-.58.02.45-.02.9-.03 1.35-.03 1.52 0 2.9.53 3.9 1.44 1 .91 1.6 2.14 1.6 3.44 0 1.3-.6 2.53-1.6 3.44-1 .91-2.4 1.44-3.9 1.44-1.52 0-2.9-.53-3.9-1.44-1-.91-1.6-2.14-1.6-3.44 0-1.3.6-2.53 1.6-3.44 1-.91 2.38-1.44 3.9-1.44z"/>
-              </svg>
-            </button>
-
-            {/* Microsoft */}
-            <button 
-              onClick={() => window.location.href = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/authorize?provider=azure`}
-              className="w-full flex justify-center py-2 px-4 border border-gray-700 rounded-lg hover:bg-gray-700/50 transition"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <rect x="2" y="2" width="10" height="10" fill="#F25022"/>
-                <rect x="12" y="2" width="10" height="10" fill="#7FBA00"/>
-                <rect x="2" y="12" width="10" height="10" fill="#00A4EF"/>
-                <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <p className="text-gray-400 text-center mt-6">
+        {/* Login Link */}
+        <p style={{
+          textAlign: 'center',
+          marginTop: '24px',
+          color: '#666',
+          fontSize: '0.95rem'
+        }}>
           Already have an account?{' '}
-          <Link to="/login" className="text-cyan-400 hover:text-cyan-300">
+          <Link to="/login" style={{
+            color: '#667eea',
+            textDecoration: 'none',
+            fontWeight: '600'
+          }}>
             Sign In
           </Link>
         </p>
+
+        {/* Social Login */}
+        <div style={{
+          marginTop: '32px',
+          textAlign: 'center'
+        }}>
+          <p style={{
+            color: '#999',
+            fontSize: '0.9rem',
+            marginBottom: '20px',
+            position: 'relative'
+          }}>
+            <span style={{
+              background: 'white',
+              padding: '0 10px',
+              position: 'relative',
+              zIndex: 1
+            }}>or continue with</span>
+            <span style={{
+              position: 'absolute',
+              top: '50%',
+              left: 0,
+              right: 0,
+              height: '1px',
+              background: '#e2e8f0',
+              zIndex: 0
+            }}></span>
+          </p>
+
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            justifyContent: 'center'
+          }}>
+            {['google', 'facebook', 'apple', 'microsoft'].map(provider => (
+              <button
+                key={provider}
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '12px',
+                  border: '2px solid #e2e8f0',
+                  background: 'white',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onMouseEnter={e => {
+                  e.target.style.borderColor = '#667eea';
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 5px 15px rgba(102, 126, 234, 0.2)';
+                }}
+                onMouseLeave={e => {
+                  e.target.style.borderColor = '#e2e8f0';
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = 'none';
+                }}
+              >
+                {provider === 'google' && 'G'}
+                {provider === 'facebook' && 'f'}
+                {provider === 'apple' && ''}
+                {provider === 'microsoft' && 'M'}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Animations */}
+      <style>
+        {`
+          @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+          }
+          
+          @keyframes slideUp {
+            from {
+              opacity: 0;
+              transform: translateY(30px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
     </div>
   );
 };

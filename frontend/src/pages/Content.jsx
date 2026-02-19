@@ -8,6 +8,30 @@ const Content = () => {
   const [content, setContent] = useState(null);
   const [liked, setLiked] = useState(false);
 
+// Add this to your Content component
+const trackView = async (contentId) => {
+  try {
+    // Increment view count in database
+    await supabase.rpc('increment_view', { content_id: contentId });
+    
+    // Log view for analytics
+    await supabase.from('views').insert([{
+      content_id: contentId,
+      user_id: user?.id || null,
+      viewed_at: new Date()
+    }]);
+  } catch (error) {
+    console.error('Error tracking view:', error);
+  }
+};
+
+// Call this when content loads
+useEffect(() => {
+  if (content?.id) {
+    trackView(content.id);
+  }
+}, [content?.id]);
+
   useEffect(() => {
     // Simulate fetching content data
     setTimeout(() => {

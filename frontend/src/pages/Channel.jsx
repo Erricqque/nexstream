@@ -1,100 +1,134 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 const Channel = () => {
   const { slug } = useParams();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('videos');
   const [channel, setChannel] = useState(null);
   const [content, setContent] = useState([]);
+  const [subscriberCount, setSubscriberCount] = useState(0);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('videos');
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    // Simulate fetching channel data
-    setTimeout(() => {
-      setChannel({
-        id: 1,
-        name: slug?.replace(/-/g, ' ')?.replace(/\b\w/g, l => l.toUpperCase()) || 'My Awesome Channel',
-        description: 'Welcome to my channel! I create amazing content about technology, gaming, and entertainment. Subscribe for regular updates!',
-        subscribers: 15234,
-        totalViews: 345678,
-        joinedDate: '2024-01-15',
-        isVerified: true,
-        banner: 'https://images.unsplash.com/photo-1536240474400-95dad987ee1b?w=1200',
-        avatar: `https://ui-avatars.com/api/?name=${slug || 'Channel'}&background=0ea5e9&color=fff&size=128`,
-        socialLinks: {
-          youtube: 'https://youtube.com',
-          twitter: 'https://twitter.com',
-          instagram: 'https://instagram.com'
-        }
-      });
+    loadChannelData();
+  }, [slug, user]);
 
-      // Simulate content data
-      setContent([
-        { 
-          id: 1, 
-          title: 'How to Build a React App in 10 Minutes', 
-          type: 'video',
-          thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400',
-          views: 15432,
-          likes: 1234,
-          comments: 89,
-          duration: '10:23',
-          uploadedAt: '2024-02-01',
-          description: 'Learn how to build a professional React application quickly'
-        },
-        { 
-          id: 2, 
-          title: 'Complete Guide to Flutterwave Integration', 
-          type: 'video',
-          thumbnail: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400',
-          views: 8765,
-          likes: 987,
-          comments: 56,
-          duration: '15:47',
-          uploadedAt: '2024-01-28',
-          description: 'Step by step guide to integrating Flutterwave payments'
-        },
-        { 
-          id: 3, 
-          title: 'Top 10 Gaming Moments of 2024', 
-          type: 'video',
-          thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400',
-          views: 23456,
-          likes: 2341,
-          comments: 234,
-          duration: '12:15',
-          uploadedAt: '2024-01-20',
-          description: 'The most epic gaming moments this year'
-        },
-        { 
-          id: 4, 
-          title: 'Music Production Basics', 
-          type: 'video',
-          thumbnail: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=400',
-          views: 5432,
-          likes: 654,
-          comments: 43,
-          duration: '20:30',
-          uploadedAt: '2024-01-15',
-          description: 'Learn the fundamentals of music production'
-        },
-      ]);
+  const loadChannelData = async () => {
+    setLoading(true);
+    try {
+      // Get REAL channel data
+      const { data: channelData, error: channelError } = await supabase
+        .from('channels')
+        .select('*')
+        .eq('slug', slug)
+        .single();
+
+      if (channelError) throw channelError;
+      setChannel(channelData);
+
+      // Check if current user is the owner
+      if (user) {
+        setIsOwner(user.id === channelData.owner_id);
+      }
+
+      // Get REAL content with view counts
+      const { data: contentData, error: contentError } = await supabase
+        .from('content')
+        .select(`
+          *,
+          content_views(count)
+        `)
+        .eq('channel_id', channelData.id)
+        .order('created_at', { ascending: false });
+
+      if (!contentError) {
+        setContent(contentData || []);
+      }
+
+      // Get REAL subscriber count
+      const { count, error: subError } = await supabase
+        .from('subscriptions')
+        .select('*', { count: 'exact', head: true })
+        .eq('channel_id', channelData.id);
+
+      if (!subError) {
+        setSubscriberCount(count || 0);
+      }
+
+      // Check if current user is subscribed
+      if (user) {
+        const { data: subData, error: checkError } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('channel_id', channelData.id)
+          .eq('subscriber_id', user.id)
+          .maybeSingle();
+
+        setIsSubscribed(!!subData);
+      }
+
+    } catch (error) {
+      console.error('Error loading channel:', error);
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, [slug]);
+    }
+  };
 
-  const handleSubscribe = () => {
-    setIsSubscribed(!isSubscribed);
-    // In real app, this would call an API
+  const handleSubscribe = async () => {
+    if (!user) {
+      alert('Please login to subscribe');
+      return;
+    }
+
+    try {
+      if (isSubscribed) {
+        // Unsubscribe
+        const { error } = await supabase
+          .from('subscriptions')
+          .delete()
+          .eq('channel_id', channel.id)
+          .eq('subscriber_id', user.id);
+        
+        if (error) throw error;
+        setSubscriberCount(prev => prev - 1);
+        setIsSubscribed(false);
+      } else {
+        // Subscribe
+        const { error } = await supabase
+          .from('subscriptions')
+          .insert([{
+            channel_id: channel.id,
+            subscriber_id: user.id
+          }]);
+        
+        if (error) throw error;
+        setSubscriberCount(prev => prev + 1);
+        setIsSubscribed(true);
+      }
+    } catch (error) {
+      console.error('Subscription error:', error);
+      alert('Failed to update subscription');
+    }
   };
 
   const formatNumber = (num) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    return num.toString();
+    return num?.toString() || '0';
+  };
+
+  const getContentIcon = (type) => {
+    switch(type?.toLowerCase()) {
+      case 'video': return '🎬';
+      case 'music': return '🎵';
+      case 'game': return '🎮';
+      default: return '📹';
+    }
   };
 
   const formatDate = (dateString) => {
@@ -103,6 +137,8 @@ const Channel = () => {
     const diffTime = Math.abs(now - date);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
+    if (diffDays < 1) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
     if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
@@ -113,7 +149,7 @@ const Channel = () => {
     return (
       <div style={{
         minHeight: '100vh',
-        background: '#0a0f1e',
+        background: '#0f0f0f',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
@@ -122,13 +158,39 @@ const Channel = () => {
           <div style={{
             width: '50px',
             height: '50px',
-            border: '3px solid #00b4d8',
+            border: '3px solid #ef4444',
             borderTopColor: 'transparent',
             borderRadius: '50%',
             margin: '0 auto 20px',
             animation: 'spin 1s linear infinite'
           }}></div>
-          <p style={{ color: '#00b4d8' }}>Loading channel...</p>
+          <p style={{ color: '#ef4444' }}>Loading channel...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!channel) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#0f0f0f',
+        color: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Channel not found</h1>
+          <p style={{ color: '#9ca3af', marginBottom: '20px' }}>The channel you're looking for doesn't exist.</p>
+          <Link to="/" style={{
+            display: 'inline-block',
+            padding: '10px 20px',
+            background: '#ef4444',
+            color: 'white',
+            textDecoration: 'none',
+            borderRadius: '5px'
+          }}>Go Home</Link>
         </div>
       </div>
     );
@@ -137,15 +199,15 @@ const Channel = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0a0f1e',
+      background: '#0f0f0f',
       color: 'white',
       fontFamily: 'Arial, sans-serif'
     }}>
       
-      {/* Channel Banner */}
+      {/* Banner */}
       <div style={{
         height: '250px',
-        background: `url(${channel.banner})`,
+        background: channel?.banner_url ? `url(${channel.banner_url})` : 'linear-gradient(135deg, #ef4444, #dc2626, #3b82f6)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         position: 'relative'
@@ -155,18 +217,19 @@ const Channel = () => {
           bottom: 0,
           left: 0,
           right: 0,
-          height: '100px',
-          background: 'linear-gradient(to top, #0a0f1e, transparent)'
+          height: '50px',
+          background: 'linear-gradient(to top, #0f0f0f, transparent)'
         }}></div>
       </div>
 
-      {/* Channel Info Section */}
+      {/* Channel Info */}
       <div style={{
         maxWidth: '1200px',
         margin: '0 auto',
-        padding: '0 30px',
+        padding: '0 20px',
+        marginTop: '-70px',
         position: 'relative',
-        marginTop: '-60px'
+        zIndex: 10
       }}>
         
         {/* Channel Header */}
@@ -174,30 +237,36 @@ const Channel = () => {
           display: 'flex',
           gap: '30px',
           alignItems: 'flex-end',
-          marginBottom: '30px',
-          flexWrap: 'wrap'
+          flexWrap: 'wrap',
+          marginBottom: '30px'
         }}>
-          {/* Channel Avatar */}
-          <img
-            src={channel.avatar}
-            alt={channel.name}
-            style={{
-              width: '120px',
-              height: '120px',
-              borderRadius: '50%',
-              border: '4px solid #00b4d8',
-              background: '#0a0f1e',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
-            }}
-          />
+          {/* Avatar */}
+          <div style={{
+            width: '120px',
+            height: '120px',
+            borderRadius: '50%',
+            background: channel?.avatar_url ? `url(${channel.avatar_url})` : 'linear-gradient(135deg, #ef4444, #dc2626)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            border: '4px solid #0f0f0f',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '48px',
+            fontWeight: 'bold',
+            color: 'white'
+          }}>
+            {!channel?.avatar_url && (channel?.name?.[0]?.toUpperCase() || 'C')}
+          </div>
 
-          {/* Channel Info */}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
-              <h1 style={{ fontSize: '2rem', margin: 0 }}>{channel.name}</h1>
-              {channel.isVerified && (
+          {/* Details */}
+          <div style={{ flex: 1, paddingBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '2rem', margin: 0 }}>{channel?.name}</h1>
+              {channel?.is_verified && (
                 <span style={{
-                  background: '#00b4d8',
+                  background: '#3b82f6',
                   color: 'white',
                   padding: '4px 12px',
                   borderRadius: '20px',
@@ -209,333 +278,329 @@ const Channel = () => {
               )}
             </div>
             
-            {/* Channel Stats */}
-            <div style={{ display: 'flex', gap: '30px', marginBottom: '15px' }}>
-              <div>
-                <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#00b4d8' }}>
-                  {formatNumber(channel.subscribers)}
-                </span>
-                <span style={{ color: '#888', marginLeft: '5px' }}>subscribers</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#00b4d8' }}>
-                  {formatNumber(channel.totalViews)}
-                </span>
-                <span style={{ color: '#888', marginLeft: '5px' }}>views</span>
-              </div>
-              <div style={{ color: '#888' }}>
-                Joined {new Date(channel.joinedDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </div>
+            <div style={{
+              display: 'flex',
+              gap: '20px',
+              marginTop: '10px',
+              color: '#9ca3af',
+              fontSize: '0.9rem',
+              flexWrap: 'wrap'
+            }}>
+              <span>@{channel?.slug}</span>
+              <span>•</span>
+              <span>{formatNumber(subscriberCount)} subscribers</span>
+              <span>•</span>
+              <span>{content.length} videos</span>
+              <span>•</span>
+              <span>Joined {new Date(channel?.created_at).toLocaleDateString()}</span>
             </div>
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-              <button
-                onClick={handleSubscribe}
-                style={{
-                  padding: '12px 30px',
-                  background: isSubscribed ? '#333' : 'linear-gradient(135deg, #00b4d8, #0077b6)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '25px',
-                  fontSize: '1rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {isSubscribed ? 'Subscribed ✓' : 'Subscribe'}
-              </button>
-
-              {/* Show Create Content button if this is the user's own channel */}
-              {user && user.id === channel.id && (
-                <Link
-                  to="/real-upload"
-                  style={{
-                    padding: '12px 30px',
-                    background: 'transparent',
-                    border: '2px solid #00b4d8',
-                    borderRadius: '25px',
-                    color: '#00b4d8',
-                    textDecoration: 'none',
-                    fontSize: '1rem',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
-                  }}
-                >
-                  + Create Content
-                </Link>
-              )}
-            </div>
+            <p style={{
+              marginTop: '15px',
+              color: '#d1d5db',
+              maxWidth: '600px',
+              lineHeight: '1.6'
+            }}>
+              {channel?.description || 'No description provided.'}
+            </p>
           </div>
         </div>
 
-        {/* Channel Description */}
-        <div style={{
-          background: 'rgba(255,255,255,0.03)',
-          borderRadius: '15px',
-          padding: '20px',
-          marginBottom: '30px',
-          border: '1px solid #333'
-        }}>
-          <p style={{ lineHeight: '1.6', color: '#ccc' }}>
-            {channel.description}
-          </p>
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
+          <button
+            onClick={handleSubscribe}
+            style={{
+              padding: '12px 30px',
+              background: isSubscribed ? '#374151' : '#ef4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '30px',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => e.target.style.background = isSubscribed ? '#4b5563' : '#dc2626'}
+            onMouseLeave={e => e.target.style.background = isSubscribed ? '#374151' : '#ef4444'}
+          >
+            {isSubscribed ? 'Subscribed' : 'Subscribe'} {formatNumber(subscriberCount)}
+          </button>
+
+          {isOwner && (
+            <Link
+              to="/upload"
+              style={{
+                padding: '12px 30px',
+                background: '#2563eb',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '30px',
+                fontSize: '1rem',
+                fontWeight: 'bold'
+              }}
+            >
+              + Upload Video
+            </Link>
+          )}
+
+          <button style={{
+            padding: '12px 30px',
+            background: '#1f1f1f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '30px',
+            fontSize: '1rem',
+            cursor: 'pointer'
+          }}>
+            Share
+          </button>
         </div>
 
         {/* Navigation Tabs */}
         <div style={{
           display: 'flex',
           gap: '30px',
-          borderBottom: '1px solid #333',
+          borderBottom: '1px solid #272727',
           marginBottom: '30px'
         }}>
-          {[
-            { id: 'videos', label: 'Videos', icon: '🎬' },
-            { id: 'shorts', label: 'Shorts', icon: '📱' },
-            { id: 'playlists', label: 'Playlists', icon: '📋' },
-            { id: 'community', label: 'Community', icon: '👥' },
-            { id: 'about', label: 'About', icon: 'ℹ️' }
-          ].map(tab => (
+          {['videos', 'playlists', 'about'].map(tab => (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              key={tab}
+              onClick={() => setActiveTab(tab)}
               style={{
-                padding: '15px 5px',
+                padding: '12px 0',
                 background: 'transparent',
                 border: 'none',
-                borderBottom: activeTab === tab.id ? '3px solid #00b4d8' : '3px solid transparent',
-                color: activeTab === tab.id ? '#00b4d8' : '#888',
-                cursor: 'pointer',
+                borderBottom: activeTab === tab ? '2px solid #ef4444' : '2px solid transparent',
+                color: activeTab === tab ? 'white' : '#9ca3af',
                 fontSize: '1rem',
-                fontWeight: activeTab === tab.id ? 'bold' : 'normal',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+                fontWeight: activeTab === tab ? 'bold' : 'normal',
+                cursor: 'pointer',
+                textTransform: 'capitalize'
               }}
             >
-              <span>{tab.icon}</span>
-              {tab.label}
+              {tab}
             </button>
           ))}
         </div>
 
-        {/* Content Grid - Videos Tab */}
+        {/* Videos Tab */}
         {activeTab === 'videos' && (
           <div>
-            {/* Upload Prompt for Channel Owners */}
-            {user && user.id === channel.id && content.length === 0 && (
+            {content.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 0' }}>
+                {isOwner ? (
+                  <>
+                    <p style={{ color: '#9ca3af', marginBottom: '20px' }}>You haven't uploaded any videos yet</p>
+                    <Link
+                      to="/upload"
+                      style={{
+                        padding: '12px 30px',
+                        background: '#ef4444',
+                        color: 'white',
+                        textDecoration: 'none',
+                        borderRadius: '5px'
+                      }}
+                    >
+                      Upload Your First Video
+                    </Link>
+                  </>
+                ) : (
+                  <p style={{ color: '#9ca3af' }}>No videos uploaded yet</p>
+                )}
+              </div>
+            ) : (
               <div style={{
-                background: 'linear-gradient(135deg, rgba(0,180,216,0.1), rgba(0,119,182,0.1))',
-                borderRadius: '15px',
-                padding: '40px',
-                textAlign: 'center',
-                marginBottom: '30px',
-                border: '2px dashed #00b4d8'
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: '25px',
+                marginBottom: '40px'
               }}>
-                <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📤</div>
-                <h2 style={{ marginBottom: '10px' }}>Your channel is ready!</h2>
-                <p style={{ color: '#888', marginBottom: '20px' }}>
-                  Start sharing your content with the world. Upload your first video to begin building your audience.
-                </p>
-                <Link
-                  to="/real-upload"
-                  style={{
-                    padding: '15px 40px',
-                    background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
-                    color: 'white',
-                    textDecoration: 'none',
-                    borderRadius: '30px',
-                    fontSize: '1.1rem',
-                    fontWeight: 'bold',
-                    display: 'inline-block'
-                  }}
-                >
-                  🚀 Upload Your First Video
-                </Link>
+                {content.map(item => (
+                  <Link
+                    key={item.id}
+                    to={`/content/${item.id}`}
+                    style={{ textDecoration: 'none', color: 'white' }}
+                  >
+                    <div style={{
+                      background: '#1f1f1f',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      transition: 'transform 0.2s, box-shadow 0.2s'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = 'translateY(-5px)';
+                      e.currentTarget.style.boxShadow = '0 10px 20px rgba(239,68,68,0.2)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}>
+                      
+                      {/* Thumbnail */}
+                      <div style={{
+                        position: 'relative',
+                        aspectRatio: '16/9',
+                        background: '#272727',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '3rem'
+                      }}>
+                        {item.thumbnail ? (
+                          <img
+                            src={item.thumbnail}
+                            alt={item.title}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover'
+                            }}
+                          />
+                        ) : (
+                          getContentIcon(item.type)
+                        )}
+                        
+                        {item.duration && (
+                          <span style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            right: '8px',
+                            padding: '4px 8px',
+                            background: 'rgba(0,0,0,0.8)',
+                            borderRadius: '4px',
+                            fontSize: '0.8rem'
+                          }}>
+                            {item.duration}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Video Info */}
+                      <div style={{ padding: '15px' }}>
+                        <h3 style={{
+                          margin: '0 0 8px 0',
+                          fontSize: '1rem',
+                          fontWeight: 'bold',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}>
+                          {item.title}
+                        </h3>
+                        
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '5px',
+                          color: '#9ca3af',
+                          fontSize: '0.9rem'
+                        }}>
+                          <span>{formatNumber(item.content_views?.[0]?.count || 0)} views</span>
+                          <span>{formatDate(item.created_at)}</span>
+                        </div>
+
+                        {item.price > 0 ? (
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '4px 12px',
+                            background: '#fbbf24',
+                            color: 'black',
+                            borderRadius: '20px',
+                            fontSize: '0.8rem',
+                            fontWeight: 'bold'
+                          }}>
+                            ${item.price}
+                          </span>
+                        ) : (
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '4px 12px',
+                            background: '#10b981',
+                            color: 'white',
+                            borderRadius: '20px',
+                            fontSize: '0.8rem',
+                            fontWeight: 'bold'
+                          }}>
+                            Free
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </div>
             )}
-
-            {/* Videos Grid */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: '25px',
-              marginBottom: '40px'
-            }}>
-              {content.map(video => (
-                <Link
-                  key={video.id}
-                  to={`/content/${video.id}`}
-                  style={{ textDecoration: 'none' }}
-                >
-                  <div style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    borderRadius: '15px',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    border: '1px solid #333'
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.transform = 'translateY(-5px)';
-                    e.currentTarget.style.borderColor = '#00b4d8';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.borderColor = '#333';
-                  }}
-                  >
-                    {/* Thumbnail with Duration */}
-                    <div style={{ position: 'relative' }}>
-                      <img
-                        src={video.thumbnail}
-                        alt={video.title}
-                        style={{
-                          width: '100%',
-                          height: '170px',
-                          objectFit: 'cover'
-                        }}
-                      />
-                      <span style={{
-                        position: 'absolute',
-                        bottom: '10px',
-                        right: '10px',
-                        background: 'rgba(0,0,0,0.8)',
-                        color: 'white',
-                        padding: '4px 8px',
-                        borderRadius: '5px',
-                        fontSize: '0.8rem'
-                      }}>
-                        {video.duration}
-                      </span>
-                    </div>
-
-                    {/* Video Info */}
-                    <div style={{ padding: '15px' }}>
-                      <h3 style={{
-                        margin: '0 0 10px 0',
-                        color: 'white',
-                        fontSize: '1rem',
-                        fontWeight: 'bold',
-                        lineHeight: '1.4'
-                      }}>
-                        {video.title}
-                      </h3>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                        <img
-                          src={channel.avatar}
-                          alt={channel.name}
-                          style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '50%'
-                          }}
-                        />
-                        <span style={{ color: '#888', fontSize: '0.9rem' }}>{channel.name}</span>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '10px', color: '#888', fontSize: '0.9rem' }}>
-                        <span>{formatNumber(video.views)} views</span>
-                        <span>•</span>
-                        <span>{formatDate(video.uploadedAt)}</span>
-                      </div>
-
-                      {/* Engagement Stats */}
-                      <div style={{
-                        display: 'flex',
-                        gap: '15px',
-                        marginTop: '10px',
-                        paddingTop: '10px',
-                        borderTop: '1px solid #333',
-                        fontSize: '0.8rem',
-                        color: '#666'
-                      }}>
-                        <span>👍 {formatNumber(video.likes)}</span>
-                        <span>💬 {video.comments}</span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
           </div>
         )}
 
         {/* About Tab */}
         {activeTab === 'about' && (
-          <div style={{
-            background: 'rgba(255,255,255,0.03)',
-            borderRadius: '15px',
-            padding: '30px',
-            border: '1px solid #333'
-          }}>
-            <h3 style={{ marginBottom: '20px', color: '#00b4d8' }}>About this channel</h3>
-            
-            <div style={{ marginBottom: '25px' }}>
-              <h4 style={{ color: '#888', marginBottom: '10px', fontSize: '0.9rem' }}>Description</h4>
-              <p style={{ lineHeight: '1.6' }}>{channel.description}</p>
-            </div>
+          <div style={{ maxWidth: '800px', paddingBottom: '40px' }}>
+            <div style={{
+              background: '#1f1f1f',
+              borderRadius: '12px',
+              padding: '30px'
+            }}>
+              <h2 style={{ marginBottom: '20px' }}>About</h2>
+              
+              <div style={{ marginBottom: '30px' }}>
+                <h3 style={{ color: '#9ca3af', marginBottom: '10px', fontSize: '1rem' }}>Description</h3>
+                <p style={{ lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                  {channel?.description || 'No description provided.'}
+                </p>
+              </div>
 
-            <div style={{ marginBottom: '25px' }}>
-              <h4 style={{ color: '#888', marginBottom: '10px', fontSize: '0.9rem' }}>Stats</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '20px',
+                marginTop: '30px',
+                paddingTop: '30px',
+                borderTop: '1px solid #272727'
+              }}>
                 <div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#00b4d8' }}>
-                    {formatNumber(channel.subscribers)}
-                  </div>
-                  <div style={{ color: '#888', fontSize: '0.9rem' }}>Subscribers</div>
+                  <h3 style={{ color: '#9ca3af', marginBottom: '10px', fontSize: '1rem' }}>Joined</h3>
+                  <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                    {new Date(channel?.created_at).toLocaleDateString(undefined, {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </p>
                 </div>
+                
                 <div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#00b4d8' }}>
-                    {formatNumber(channel.totalViews)}
-                  </div>
-                  <div style={{ color: '#888', fontSize: '0.9rem' }}>Total Views</div>
+                  <h3 style={{ color: '#9ca3af', marginBottom: '10px', fontSize: '1rem' }}>Total Views</h3>
+                  <p style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#ef4444' }}>
+                    {formatNumber(content.reduce((sum, item) => 
+                      sum + (item.content_views?.[0]?.count || 0), 0
+                    ))}
+                  </p>
                 </div>
+
                 <div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#00b4d8' }}>
-                    {content.length}
-                  </div>
-                  <div style={{ color: '#888', fontSize: '0.9rem' }}>Videos</div>
+                  <h3 style={{ color: '#9ca3af', marginBottom: '10px', fontSize: '1rem' }}>Subscribers</h3>
+                  <p style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                    {formatNumber(subscriberCount)}
+                  </p>
                 </div>
               </div>
-            </div>
-
-            <div>
-              <h4 style={{ color: '#888', marginBottom: '10px', fontSize: '0.9rem' }}>Joined</h4>
-              <p>{new Date(channel.joinedDate).toLocaleDateString('en-US', { 
-                month: 'long', 
-                day: 'numeric', 
-                year: 'numeric' 
-              })}</p>
             </div>
           </div>
         )}
 
-        {/* Other tabs (Shorts, Playlists, Community) - Placeholders */}
-        {activeTab !== 'videos' && activeTab !== 'about' && (
-          <div style={{
-            background: 'rgba(255,255,255,0.03)',
-            borderRadius: '15px',
-            padding: '60px',
-            textAlign: 'center',
-            border: '1px solid #333'
-          }}>
-            <div style={{ fontSize: '3rem', marginBottom: '20px' }}>
-              {activeTab === 'shorts' ? '📱' : activeTab === 'playlists' ? '📋' : '👥'}
-            </div>
-            <h3 style={{ marginBottom: '10px' }}>Coming Soon</h3>
-            <p style={{ color: '#888' }}>
-              {activeTab === 'shorts' && 'Short-form content is on its way!'}
-              {activeTab === 'playlists' && 'Playlists will be available soon.'}
-              {activeTab === 'community' && 'Community features are coming soon.'}
-            </p>
+        {/* Playlists Tab (Coming Soon) */}
+        {activeTab === 'playlists' && (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: '#9ca3af' }}>
+            <p>Playlists coming soon...</p>
           </div>
         )}
       </div>
 
-      {/* Animation */}
       <style>
         {`
           @keyframes spin {

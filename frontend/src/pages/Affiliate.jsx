@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 
 const Affiliate = () => {
@@ -14,128 +15,176 @@ const Affiliate = () => {
     withdrawn: 0
   });
   const [referralLink, setReferralLink] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [withdrawalMethod, setWithdrawalMethod] = useState('mpesa');
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalPhone, setWithdrawalPhone] = useState('');
 
   useEffect(() => {
     if (user) {
-      // Generate unique referral link
+      loadAffiliateData();
       setReferralLink(`${window.location.origin}/register?ref=${user.id}`);
-      
-      // Load referral data from backend
-      loadReferralData();
     }
   }, [user]);
 
-  const loadReferralData = async () => {
-    // Simulated data - replace with actual API calls
-    setReferrals([
-      { id: 1, name: 'John Doe', level: 1, joined: '2026-02-01', earnings: 45.50, active: true },
-      { id: 2, name: 'Jane Smith', level: 1, joined: '2026-02-03', earnings: 32.75, active: true },
-      { id: 3, name: 'Bob Johnson', level: 2, joined: '2026-02-05', earnings: 18.20, active: true },
-      { id: 4, name: 'Alice Brown', level: 2, joined: '2026-02-07', earnings: 12.90, active: false },
-      { id: 5, name: 'Charlie Wilson', level: 3, joined: '2026-02-10', earnings: 5.50, active: true },
-    ]);
+  const loadAffiliateData = async () => {
+    try {
+      // Load referrals from database
+      const { data: referralsData } = await supabase
+        .from('referrals')
+        .select(`
+          *,
+          referred:user_id (
+            email,
+            full_name,
+            created_at
+          )
+        `)
+        .eq('referrer_id', user.id);
 
-    setEarnings({
-      total: 245.75,
-      level1: 124.50,
-      level2: 67.80,
-      level3: 53.45,
-      pending: 78.25,
-      withdrawn: 167.50
-    });
+      setReferrals(referralsData || []);
+
+      // Load earnings
+      const { data: earningsData } = await supabase
+        .from('earnings')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'commission');
+
+      const { data: withdrawalsData } = await supabase
+        .from('withdrawals')
+        .select('amount')
+        .eq('user_id', user.id)
+        .eq('status', 'completed');
+
+      const totalEarnings = earningsData?.reduce((sum, e) => sum + e.amount, 0) || 0;
+      const totalWithdrawn = withdrawalsData?.reduce((sum, w) => sum + w.amount, 0) || 0;
+
+      // Calculate by level
+      const level1 = earningsData?.filter(e => e.metadata?.level === 1).reduce((sum, e) => sum + e.amount, 0) || 0;
+      const level2 = earningsData?.filter(e => e.metadata?.level === 2).reduce((sum, e) => sum + e.amount, 0) || 0;
+      const level3 = earningsData?.filter(e => e.metadata?.level === 3).reduce((sum, e) => sum + e.amount, 0) || 0;
+
+      setEarnings({
+        total: totalEarnings - totalWithdrawn,
+        level1,
+        level2,
+        level3,
+        pending: totalEarnings - totalWithdrawn,
+        withdrawn: totalWithdrawn
+      });
+    } catch (error) {
+      console.error('Error loading affiliate data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const copyReferralLink = () => {
-    navigator.clipboard.writeText(referralLink);
-    alert('Referral link copied to clipboard!');
+  const handleWithdrawal = async () => {
+    if (!withdrawalAmount || withdrawalAmount < 10) {
+      alert('Minimum withdrawal is $10');
+      return;
+    }
+
+    if (withdrawalAmount > earnings.pending) {
+      alert('Insufficient balance');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('withdrawals')
+        .insert([{
+          user_id: user.id,
+          amount: parseFloat(withdrawalAmount),
+          payment_method: withdrawalMethod,
+          phone_number: withdrawalPhone,
+          status: 'pending',
+          created_at: new Date()
+        }]);
+
+      if (error) throw error;
+      
+      alert('Withdrawal request submitted successfully!');
+      setWithdrawalAmount('');
+      loadAffiliateData();
+    } catch (error) {
+      console.error('Withdrawal error:', error);
+      alert('Failed to submit withdrawal request');
+    }
   };
+
+  if (loading) {
+    return <div style={{ color: 'white', padding: '40px' }}>Loading...</div>;
+  }
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0a0f1e 0%, #0b1a2e 50%, #0a0f1e 100%)',
+      background: '#0f0f0f',
       color: 'white',
-      padding: '30px',
+      padding: '40px',
       fontFamily: 'Arial, sans-serif'
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         
-        {/* Header */}
-        <h1 style={{ 
-          fontSize: '2.5rem', 
-          marginBottom: '10px',
-          background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent'
-        }}>
-          Network Marketing - MLM System
-        </h1>
-        <p style={{ color: '#888', marginBottom: '30px' }}>
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '10px' }}>Network Marketing</h1>
+        <p style={{ color: '#888', marginBottom: '40px' }}>
           Earn commissions by referring new users to NexStream
         </p>
 
-        {/* Earnings Summary Cards */}
+        {/* Earnings Summary */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '20px',
-          marginBottom: '30px'
+          marginBottom: '40px'
         }}>
           <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: '15px',
-            padding: '25px',
-            border: '1px solid #333'
+            background: '#1f1f1f',
+            borderRadius: '10px',
+            padding: '20px'
           }}>
             <h3 style={{ color: '#888', marginBottom: '10px' }}>Total Earnings</h3>
-            <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#00b4d8' }}>
-              ${earnings.total.toFixed(2)}
-            </p>
+            <p style={{ fontSize: '2rem', color: '#ef4444' }}>${earnings.total.toFixed(2)}</p>
           </div>
-
+          
           <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: '15px',
-            padding: '25px',
-            border: '1px solid #333'
+            background: '#1f1f1f',
+            borderRadius: '10px',
+            padding: '20px'
           }}>
             <h3 style={{ color: '#888', marginBottom: '10px' }}>Level 1 (10%)</h3>
-            <p style={{ fontSize: '1.5rem', color: '#FFD700' }}>${earnings.level1.toFixed(2)}</p>
+            <p style={{ fontSize: '1.5rem', color: '#fbbf24' }}>${earnings.level1.toFixed(2)}</p>
           </div>
-
+          
           <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: '15px',
-            padding: '25px',
-            border: '1px solid #333'
+            background: '#1f1f1f',
+            borderRadius: '10px',
+            padding: '20px'
           }}>
             <h3 style={{ color: '#888', marginBottom: '10px' }}>Level 2 (5%)</h3>
-            <p style={{ fontSize: '1.5rem', color: '#FFA500' }}>${earnings.level2.toFixed(2)}</p>
+            <p style={{ fontSize: '1.5rem', color: '#fbbf24' }}>${earnings.level2.toFixed(2)}</p>
           </div>
-
+          
           <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: '15px',
-            padding: '25px',
-            border: '1px solid #333'
+            background: '#1f1f1f',
+            borderRadius: '10px',
+            padding: '20px'
           }}>
             <h3 style={{ color: '#888', marginBottom: '10px' }}>Level 3 (2.5%)</h3>
-            <p style={{ fontSize: '1.5rem', color: '#FF69B4' }}>${earnings.level3.toFixed(2)}</p>
+            <p style={{ fontSize: '1.5rem', color: '#fbbf24' }}>${earnings.level3.toFixed(2)}</p>
           </div>
         </div>
 
-        {/* Referral Link Section */}
+        {/* Referral Link */}
         <div style={{
-          background: 'rgba(0,180,216,0.1)',
-          borderRadius: '15px',
+          background: '#1f1f1f',
+          borderRadius: '10px',
           padding: '30px',
-          marginBottom: '30px',
-          border: '1px solid #00b4d8'
+          marginBottom: '40px'
         }}>
-          <h2 style={{ marginBottom: '15px' }}>Your Referral Link</h2>
-          <p style={{ color: '#888', marginBottom: '15px' }}>
-            Share this link with friends. You earn 10% from their purchases, 5% from their referrals, and 2.5% from their referrals' referrals.
-          </p>
+          <h3 style={{ marginBottom: '15px' }}>Your Referral Link</h3>
           <div style={{ display: 'flex', gap: '10px' }}>
             <input
               type="text"
@@ -143,175 +192,163 @@ const Affiliate = () => {
               readOnly
               style={{
                 flex: 1,
-                padding: '15px',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid #333',
-                borderRadius: '10px',
-                color: '#00b4d8',
-                fontSize: '1rem'
+                padding: '12px',
+                background: '#2d2d2d',
+                border: '1px solid #3d3d3d',
+                borderRadius: '5px',
+                color: '#ef4444'
               }}
             />
             <button
-              onClick={copyReferralLink}
+              onClick={() => {
+                navigator.clipboard.writeText(referralLink);
+                alert('Copied!');
+              }}
               style={{
-                padding: '15px 30px',
-                background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
+                padding: '12px 20px',
+                background: '#ef4444',
                 color: 'white',
                 border: 'none',
-                borderRadius: '10px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
+                borderRadius: '5px',
+                cursor: 'pointer'
               }}
             >
-              Copy Link
+              Copy
             </button>
           </div>
         </div>
 
-        {/* Commission Structure */}
+        {/* Withdrawal Section */}
         <div style={{
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: '15px',
+          background: '#1f1f1f',
+          borderRadius: '10px',
           padding: '30px',
-          marginBottom: '30px'
+          marginBottom: '40px'
         }}>
-          <h2 style={{ marginBottom: '20px' }}>Commission Structure</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                background: 'rgba(255,215,0,0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 10px',
-                fontSize: '24px'
-              }}>👤</div>
-              <h3>Level 1</h3>
-              <p style={{ color: '#FFD700', fontSize: '1.5rem', fontWeight: 'bold' }}>10%</p>
-              <p style={{ color: '#888' }}>Direct referrals</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                background: 'rgba(255,165,0,0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 10px',
-                fontSize: '24px'
-              }}>👥</div>
-              <h3>Level 2</h3>
-              <p style={{ color: '#FFA500', fontSize: '1.5rem', fontWeight: 'bold' }}>5%</p>
-              <p style={{ color: '#888' }}>Referrals of referrals</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                background: 'rgba(255,105,180,0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 10px',
-                fontSize: '24px'
-              }}>👪</div>
-              <h3>Level 3</h3>
-              <p style={{ color: '#FF69B4', fontSize: '1.5rem', fontWeight: 'bold' }}>2.5%</p>
-              <p style={{ color: '#888' }}>Third level referrals</p>
-            </div>
+          <h3 style={{ marginBottom: '20px' }}>Withdraw Earnings</h3>
+          <p style={{ color: '#888', marginBottom: '20px' }}>
+            Available Balance: <span style={{ color: '#ef4444', fontSize: '1.5rem' }}>${earnings.pending.toFixed(2)}</span>
+          </p>
+
+          <div style={{ display: 'grid', gap: '20px', maxWidth: '400px' }}>
+            <input
+              type="number"
+              placeholder="Amount to withdraw ($10 min)"
+              value={withdrawalAmount}
+              onChange={(e) => setWithdrawalAmount(e.target.value)}
+              style={{
+                padding: '12px',
+                background: '#2d2d2d',
+                border: '1px solid #3d3d3d',
+                borderRadius: '5px',
+                color: 'white'
+              }}
+            />
+
+            <select
+              value={withdrawalMethod}
+              onChange={(e) => setWithdrawalMethod(e.target.value)}
+              style={{
+                padding: '12px',
+                background: '#2d2d2d',
+                border: '1px solid #3d3d3d',
+                borderRadius: '5px',
+                color: 'white'
+              }}
+            >
+              <option value="mpesa">M-Pesa</option>
+              <option value="airtel">Airtel Money</option>
+              <option value="tigo">Tigo Pesa</option>
+              <option value="bank">Bank Transfer</option>
+            </select>
+
+            <input
+              type="tel"
+              placeholder="Phone Number"
+              value={withdrawalPhone}
+              onChange={(e) => setWithdrawalPhone(e.target.value)}
+              style={{
+                padding: '12px',
+                background: '#2d2d2d',
+                border: '1px solid #3d3d3d',
+                borderRadius: '5px',
+                color: 'white'
+              }}
+            />
+
+            <button
+              onClick={handleWithdrawal}
+              style={{
+                padding: '15px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                fontWeight: 'bold'
+              }}
+            >
+              Request Withdrawal
+            </button>
           </div>
         </div>
 
-        {/* Referral List */}
+        {/* Referrals List */}
+        <h3 style={{ marginBottom: '20px' }}>Your Referrals ({referrals.length})</h3>
         <div style={{
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: '15px',
-          padding: '30px'
+          background: '#1f1f1f',
+          borderRadius: '10px',
+          overflow: 'hidden'
         }}>
-          <h2 style={{ marginBottom: '20px' }}>Your Referrals</h2>
-          
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #333' }}>
-                <th style={{ padding: '15px', textAlign: 'left' }}>Name</th>
-                <th style={{ padding: '15px', textAlign: 'left' }}>Level</th>
-                <th style={{ padding: '15px', textAlign: 'left' }}>Joined</th>
-                <th style={{ padding: '15px', textAlign: 'left' }}>Status</th>
-                <th style={{ padding: '15px', textAlign: 'left' }}>Earnings</th>
-              </tr>
-            </thead>
-            <tbody>
-              {referrals.map(ref => (
-                <tr key={ref.id} style={{ borderBottom: '1px solid #222' }}>
-                  <td style={{ padding: '15px' }}>{ref.name}</td>
-                  <td style={{ padding: '15px' }}>
-                    <span style={{
-                      background: ref.level === 1 ? 'rgba(255,215,0,0.2)' : 
-                                 ref.level === 2 ? 'rgba(255,165,0,0.2)' : 'rgba(255,105,180,0.2)',
-                      color: ref.level === 1 ? '#FFD700' : 
-                             ref.level === 2 ? '#FFA500' : '#FF69B4',
-                      padding: '5px 10px',
-                      borderRadius: '5px'
-                    }}>
-                      Level {ref.level}
-                    </span>
-                  </td>
-                  <td style={{ padding: '15px', color: '#888' }}>{ref.joined}</td>
-                  <td style={{ padding: '15px' }}>
-                    <span style={{
-                      background: ref.active ? 'rgba(0,255,0,0.2)' : 'rgba(255,0,0,0.2)',
-                      color: ref.active ? '#4CAF50' : '#ff4444',
-                      padding: '5px 10px',
-                      borderRadius: '5px'
-                    }}>
-                      {ref.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '15px', color: '#00b4d8', fontWeight: 'bold' }}>
-                    ${ref.earnings.toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Withdraw Section */}
-        <div style={{
-          marginTop: '30px',
-          background: 'linear-gradient(135deg, rgba(0,180,216,0.2), rgba(0,119,182,0.2))',
-          borderRadius: '15px',
-          padding: '30px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div>
-            <h3>Available for Withdrawal</h3>
-            <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#00b4d8' }}>
-              ${earnings.pending.toFixed(2)}
+          {referrals.length === 0 ? (
+            <p style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+              No referrals yet. Share your link to start earning!
             </p>
-            <p style={{ color: '#888' }}>Minimum withdrawal: $50</p>
-          </div>
-          <button style={{
-            padding: '15px 40px',
-            background: earnings.pending >= 50 ? 'linear-gradient(135deg, #00b4d8, #0077b6)' : '#333',
-            color: 'white',
-            border: 'none',
-            borderRadius: '10px',
-            fontSize: '1.1rem',
-            fontWeight: 'bold',
-            cursor: earnings.pending >= 50 ? 'pointer' : 'not-allowed',
-            opacity: earnings.pending >= 50 ? 1 : 0.5
-          }}>
-            Withdraw Funds
-          </button>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ background: '#2d2d2d' }}>
+                <tr>
+                  <th style={{ padding: '15px', textAlign: 'left' }}>User</th>
+                  <th style={{ padding: '15px', textAlign: 'left' }}>Level</th>
+                  <th style={{ padding: '15px', textAlign: 'left' }}>Joined</th>
+                  <th style={{ padding: '15px', textAlign: 'left' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {referrals.map(ref => (
+                  <tr key={ref.id} style={{ borderBottom: '1px solid #3d3d3d' }}>
+                    <td style={{ padding: '15px' }}>
+                      {ref.referred?.full_name || ref.referred?.email || 'Anonymous'}
+                    </td>
+                    <td style={{ padding: '15px' }}>
+                      <span style={{
+                        background: ref.level === 1 ? '#fbbf24' : ref.level === 2 ? '#f59e0b' : '#ef4444',
+                        color: 'black',
+                        padding: '3px 10px',
+                        borderRadius: '3px'
+                      }}>
+                        Level {ref.level}
+                      </span>
+                    </td>
+                    <td style={{ padding: '15px', color: '#888' }}>
+                      {new Date(ref.joined_at).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: '15px' }}>
+                      <span style={{
+                        background: ref.status === 'active' ? '#10b981' : '#6b7280',
+                        color: 'white',
+                        padding: '3px 10px',
+                        borderRadius: '3px'
+                      }}>
+                        {ref.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

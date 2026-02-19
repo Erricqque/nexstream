@@ -1,159 +1,159 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import AIHomeWidget from './AIHomeWidget';
+import { tmdb } from '../services/tmdb';
 
 const Home = () => {
   const { user } = useAuth();
+  const [featuredMovies, setFeaturedMovies] = useState([]);
+  const [popularMovies, setPopularMovies] = useState([]);
+  const [trendingMovies, setTrendingMovies] = useState([]);
+  const [upcomingMovies, setUpcomingMovies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    users: 15432,
+    movies: 9823,
+    views: 1234567
+  });
+
+  useEffect(() => {
+    loadMovies();
+  }, []);
+
+  const loadMovies = async () => {
+    setLoading(true);
+    try {
+      // Get popular movies
+      const popular = await tmdb.getPopular(1);
+      setPopularMovies(popular.results?.slice(0, 8) || []);
+      
+      // Get trending movies
+      const trending = await tmdb.getTrending('week');
+      setTrendingMovies(trending.results?.slice(0, 8) || []);
+      
+      // Get upcoming movies
+      const upcoming = await tmdb.getUpcoming(1);
+      setUpcomingMovies(upcoming.results?.slice(0, 8) || []);
+      
+      // Set featured movies (mix of popular and trending)
+      const featured = popular.results?.slice(0, 6) || [];
+      setFeaturedMovies(featured);
+      
+    } catch (error) {
+      console.error('Error loading movies:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getImageUrl = (path) => {
+    return path ? `https://image.tmdb.org/t/p/w500${path}` : null;
+  };
+
+  const formatNumber = (num) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num?.toString() || '0';
+  };
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#0f0f0f',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{
+          width: '60px',
+          height: '60px',
+          border: '4px solid rgba(239,68,68,0.2)',
+          borderTopColor: '#ef4444',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }}></div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0a0f1e 0%, #0b1a2e 50%, #0a0f1e 100%)',
+      background: '#0f0f0f',
       color: 'white',
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       position: 'relative',
-      overflow: 'hidden'
+      overflowX: 'hidden'
     }}>
       
-      {/* ===== ANIMATED BACKGROUND ELEMENTS ===== */}
-      
-      {/* Floating orbs */}
+      {/* ===== ANIMATED BACKGROUND ===== */}
       <div style={{
-        position: 'absolute',
-        top: '10%',
-        left: '5%',
-        width: '300px',
-        height: '300px',
-        background: 'radial-gradient(circle, rgba(0,180,216,0.2) 0%, transparent 70%)',
-        borderRadius: '50%',
-        filter: 'blur(40px)',
-        animation: 'float 20s infinite ease-in-out',
-        zIndex: 0
-      }}></div>
-      
-      <div style={{
-        position: 'absolute',
-        bottom: '10%',
-        right: '5%',
-        width: '400px',
-        height: '400px',
-        background: 'radial-gradient(circle, rgba(255,105,180,0.15) 0%, transparent 70%)',
-        borderRadius: '50%',
-        filter: 'blur(50px)',
-        animation: 'float 25s infinite ease-in-out reverse',
-        zIndex: 0
-      }}></div>
-      
-      <div style={{
-        position: 'absolute',
-        top: '40%',
-        right: '20%',
-        width: '200px',
-        height: '200px',
-        background: 'radial-gradient(circle, rgba(255,215,0,0.15) 0%, transparent 70%)',
-        borderRadius: '50%',
-        filter: 'blur(30px)',
-        animation: 'float 15s infinite ease-in-out',
-        zIndex: 0
-      }}></div>
-
-      {/* Animated wave lines */}
-      <svg style={{
-        position: 'absolute',
+        position: 'fixed',
         top: 0,
         left: 0,
-        width: '100%',
-        height: '100%',
-        zIndex: 1,
+        right: 0,
+        bottom: 0,
+        zIndex: 0,
+        overflow: 'hidden',
         pointerEvents: 'none'
       }}>
-        <defs>
-          <linearGradient id="wave-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#00b4d8" stopOpacity="0.1" />
-            <stop offset="50%" stopColor="#0077b6" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#00b4d8" stopOpacity="0.1" />
-          </linearGradient>
-        </defs>
-        
-        {/* Wave 1 */}
-        <path d="M0,100 Q150,50 300,100 T600,100 T900,100 T1200,100 T1500,100 T1800,100 T2100,100 T2400,100" 
-              stroke="url(#wave-gradient)" 
-              strokeWidth="3" 
-              fill="none"
-              style={{
-                animation: 'waveFlow 25s linear infinite'
-              }} />
-        
-        {/* Wave 2 */}
-        <path d="M0,200 Q200,250 400,200 T800,200 T1200,200 T1600,200 T2000,200 T2400,200" 
-              stroke="url(#wave-gradient)" 
-              strokeWidth="2" 
-              fill="none"
-              style={{
-                animation: 'waveFlowReverse 30s linear infinite'
-              }} />
-        
-        {/* Wave 3 */}
-        <path d="M0,300 Q300,350 600,300 T1200,300 T1800,300 T2400,300" 
-              stroke="url(#wave-gradient)" 
-              strokeWidth="2.5" 
-              fill="none"
-              style={{
-                animation: 'waveFlow 20s linear infinite'
-              }} />
-      </svg>
-
-      {/* Floating particles */}
-      {[...Array(20)].map((_, i) => (
-        <div key={i} style={{
+        <div style={{
           position: 'absolute',
-          top: `${Math.random() * 100}%`,
-          left: `${Math.random() * 100}%`,
-          width: '2px',
-          height: '2px',
-          background: 'rgba(100,255,218,0.3)',
+          top: '10%',
+          left: '5%',
+          width: '400px',
+          height: '400px',
+          background: 'radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%)',
           borderRadius: '50%',
-          boxShadow: '0 0 10px rgba(0,180,216,0.5)',
-          animation: `floatParticle ${15 + Math.random() * 20}s linear infinite`,
-          animationDelay: `${Math.random() * 10}s`,
-          zIndex: 1
+          filter: 'blur(60px)',
+          animation: 'float 25s infinite ease-in-out'
         }}></div>
-      ))}
+        
+        <div style={{
+          position: 'absolute',
+          bottom: '10%',
+          right: '5%',
+          width: '500px',
+          height: '500px',
+          background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%)',
+          borderRadius: '50%',
+          filter: 'blur(80px)',
+          animation: 'float 30s infinite ease-in-out reverse'
+        }}></div>
+      </div>
 
       {/* ===== MAIN CONTENT ===== */}
-      <div style={{
-        position: 'relative',
-        zIndex: 10,
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      <div style={{ position: 'relative', zIndex: 10 }}>
         
-        {/* Hero Section */}
+        {/* ===== HERO SECTION ===== */}
         <div style={{
-          height: '100vh',
+          height: '90vh',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden'
         }}>
-          <div style={{ textAlign: 'center', padding: '0 20px' }}>
-            
+          <div style={{
+            textAlign: 'center',
+            padding: '0 20px',
+            animation: 'fadeInUp 1s ease'
+          }}>
             {/* Badge */}
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '10px',
-              background: 'rgba(255,255,255,0.05)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(0,180,216,0.3)',
+              gap: '8px',
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid #ef4444',
               borderRadius: '50px',
               padding: '8px 20px',
               marginBottom: '30px',
-              animation: 'glow 3s ease-in-out infinite'
+              animation: 'pulse 2s ease-in-out infinite'
             }}>
-              <span style={{ fontSize: '1.2rem' }}>✨</span>
-              <span style={{ color: '#00b4d8', fontWeight: '500' }}>The Future of Digital Entertainment</span>
+              <span style={{ fontSize: '1.2rem' }}>🎬</span>
+              <span style={{ color: '#ef4444', fontWeight: '500' }}>The Ultimate Movie Experience</span>
             </div>
 
             {/* Main Title */}
@@ -161,12 +161,12 @@ const Home = () => {
               fontSize: 'clamp(3rem, 10vw, 6rem)',
               fontWeight: '800',
               margin: '0 0 20px 0',
-              background: 'linear-gradient(135deg, #00b4d8, #0077b6, #ff69b4, #00b4d8)',
+              background: 'linear-gradient(135deg, #ef4444, #3b82f6, #8b5cf6, #ef4444)',
               backgroundSize: '300% 300%',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               animation: 'gradientFlow 8s ease infinite',
-              textShadow: '0 0 30px rgba(0,180,216,0.3)'
+              letterSpacing: '-0.02em'
             }}>
               NexStream
             </h1>
@@ -176,9 +176,9 @@ const Home = () => {
               fontSize: 'clamp(1.2rem, 4vw, 1.8rem)',
               color: 'rgba(255,255,255,0.9)',
               marginBottom: '20px',
-              textShadow: '0 2px 10px rgba(0,0,0,0.5)'
+              fontWeight: '300'
             }}>
-              Create. Sell. Connect. Earn.
+              Thousands of Free Movies at Your Fingertips
             </p>
 
             {/* Description */}
@@ -189,8 +189,8 @@ const Home = () => {
               margin: '0 auto 40px',
               lineHeight: '1.6'
             }}>
-              The all-in-one platform where creators build channels, sell content, 
-              and connect with fans through real-time chat and network marketing.
+              Watch the latest movies, classics, and hidden gems completely free. 
+              No subscription needed. Start watching now!
             </p>
 
             {/* CTA Buttons */}
@@ -201,58 +201,75 @@ const Home = () => {
               flexWrap: 'wrap'
             }}>
               <Link
-                to="/register"
+                to="/tmdb-movies"
                 style={{
-                  padding: '15px 40px',
-                  background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
+                  padding: '16px 40px',
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
                   color: 'white',
                   textDecoration: 'none',
                   borderRadius: '50px',
                   fontSize: '1.1rem',
-                  fontWeight: 'bold',
+                  fontWeight: '600',
                   border: 'none',
                   cursor: 'pointer',
-                  boxShadow: '0 10px 20px rgba(0,180,216,0.3)',
-                  transition: 'all 0.3s ease',
-                  animation: 'pulse 3s ease-in-out infinite'
-                }}
-                onMouseEnter={e => {
-                  e.target.style.transform = 'translateY(-3px)';
-                  e.target.style.boxShadow = '0 15px 30px rgba(0,180,216,0.4)';
-                }}
-                onMouseLeave={e => {
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = '0 10px 20px rgba(0,180,216,0.3)';
-                }}
-              >
-                Start Your Channel Free
-              </Link>
-
-              <Link
-                to="/login"
-                style={{
-                  padding: '15px 40px',
-                  background: 'transparent',
-                  color: 'white',
-                  textDecoration: 'none',
-                  borderRadius: '50px',
-                  fontSize: '1.1rem',
-                  fontWeight: 'bold',
-                  border: '2px solid rgba(0,180,216,0.5)',
-                  cursor: 'pointer',
+                  boxShadow: '0 10px 20px rgba(239,68,68,0.3)',
                   transition: 'all 0.3s ease'
                 }}
                 onMouseEnter={e => {
-                  e.target.style.background = 'rgba(0,180,216,0.1)';
-                  e.target.style.borderColor = '#00b4d8';
+                  e.target.style.transform = 'translateY(-3px)';
+                  e.target.style.boxShadow = '0 15px 30px rgba(239,68,68,0.4)';
                 }}
                 onMouseLeave={e => {
-                  e.target.style.background = 'transparent';
-                  e.target.style.borderColor = 'rgba(0,180,216,0.5)';
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 10px 20px rgba(239,68,68,0.3)';
                 }}
               >
-                Sign In
+                Browse All Movies
               </Link>
+              
+              {!user ? (
+                <Link
+                  to="/register"
+                  style={{
+                    padding: '16px 40px',
+                    background: 'transparent',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '50px',
+                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    border: '2px solid rgba(239,68,68,0.5)',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.target.style.background = 'rgba(239,68,68,0.1)';
+                    e.target.style.borderColor = '#ef4444';
+                  }}
+                  onMouseLeave={e => {
+                    e.target.style.background = 'transparent';
+                    e.target.style.borderColor = 'rgba(239,68,68,0.5)';
+                  }}
+                >
+                  Sign Up Free
+                </Link>
+              ) : (
+                <Link
+                  to="/dashboard"
+                  style={{
+                    padding: '16px 40px',
+                    background: 'transparent',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '50px',
+                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    border: '2px solid rgba(239,68,68,0.5)'
+                  }}
+                >
+                  Go to Dashboard
+                </Link>
+              )}
             </div>
 
             {/* Stats */}
@@ -263,478 +280,508 @@ const Home = () => {
               marginTop: '60px',
               flexWrap: 'wrap'
             }}>
-              <div>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#00b4d8' }}>10K+</div>
-                <div style={{ color: '#888' }}>Active Creators</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#ef4444' }}>
+                  {formatNumber(stats.movies)}+
+                </div>
+                <div style={{ color: '#888' }}>Free Movies</div>
               </div>
-              <div>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ff69b4' }}>50K+</div>
-                <div style={{ color: '#888' }}>Content Items</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                  {formatNumber(stats.users)}+
+                </div>
+                <div style={{ color: '#888' }}>Happy Users</div>
               </div>
-              <div>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#FFD700' }}>1M+</div>
-                <div style={{ color: '#888' }}>Monthly Views</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#10b981' }}>
+                  {formatNumber(stats.views)}+
+                </div>
+                <div style={{ color: '#888' }}>Total Views</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ===== ENHANCED GET STARTED SECTION ===== */}
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto 60px',
-          padding: '40px 30px',
-          background: 'linear-gradient(135deg, rgba(0,180,216,0.1), rgba(0,119,182,0.05))',
-          borderRadius: '30px',
-          border: '1px solid rgba(0,180,216,0.3)',
-          backdropFilter: 'blur(10px)'
-        }}>
-          
-          {/* Section Header */}
-          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-            <h2 style={{ 
-              fontSize: '2.2rem', 
-              marginBottom: '10px',
-              background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
+        {/* ===== POPULAR MOVIES SECTION ===== */}
+        {popularMovies.length > 0 && (
+          <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '60px 20px' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '30px'
             }}>
-              {user ? '👋 Welcome Back!' : '🚀 Start Your Creator Journey'}
-            </h2>
-            <p style={{ color: '#aaa', fontSize: '1.1rem' }}>
-              {user 
-                ? 'What would you like to do today?' 
-                : 'Choose how you want to begin your success story on NexStream'}
-            </p>
-          </div>
+              <h2 style={{ fontSize: '2rem', fontWeight: '600' }}>🔥 Popular Movies</h2>
+              <Link to="/tmdb-movies" style={{ 
+                color: '#ef4444', 
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'gap 0.2s'
+              }}
+              onMouseEnter={e => e.target.style.gap = '10px'}
+              onMouseLeave={e => e.target.style.gap = '5px'}>
+                View All <span>→</span>
+              </Link>
+            </div>
 
-          {/* Conditional Content based on login status */}
-          {!user ? (
-            /* Options for non-logged-in users */
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
               gap: '25px'
             }}>
-              
-              {/* Option 1: Watch Content */}
+              {popularMovies.map(movie => (
+                <Link
+                  key={movie.id}
+                  to={`/tmdb-movie/${movie.id}`}
+                  style={{ textDecoration: 'none', color: 'white' }}
+                >
+                  <div style={{
+                    background: '#1f1f1f',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    transition: 'transform 0.3s, box-shadow 0.3s',
+                    cursor: 'pointer',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = 'translateY(-8px)';
+                    e.currentTarget.style.boxShadow = '0 15px 30px rgba(239,68,68,0.3)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}>
+                    
+                    {/* Poster */}
+                    <div style={{
+                      position: 'relative',
+                      aspectRatio: '2/3',
+                      background: '#2d2d2d'
+                    }}>
+                      {movie.poster_path ? (
+                        <img
+                          src={getImageUrl(movie.poster_path)}
+                          alt={movie.title}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '3rem',
+                          color: '#666'
+                        }}>
+                          🎬
+                        </div>
+                      )}
+                      
+                      {/* Rating Badge */}
+                      {movie.vote_average > 0 && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '10px',
+                          right: '10px',
+                          background: 'rgba(0,0,0,0.8)',
+                          padding: '5px 10px',
+                          borderRadius: '20px',
+                          fontSize: '0.8rem',
+                          color: '#fbbf24',
+                          fontWeight: 'bold',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}>
+                          ⭐ {movie.vote_average.toFixed(1)}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Movie Info */}
+                    <div style={{ padding: '12px', flex: 1 }}>
+                      <h3 style={{
+                        margin: '0 0 8px 0',
+                        fontSize: '0.95rem',
+                        fontWeight: '600',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        lineHeight: '1.4'
+                      }}>
+                        {movie.title}
+                      </h3>
+                      
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '0.8rem',
+                        color: '#888'
+                      }}>
+                        <span>{movie.release_date?.split('-')[0] || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ===== TRENDING NOW SECTION ===== */}
+        {trendingMovies.length > 0 && (
+          <div style={{ background: 'linear-gradient(180deg, #0f0f0f 0%, #1a1a1a 100%)', padding: '60px 20px' }}>
+            <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
               <div style={{
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '20px',
-                padding: '30px 25px',
-                border: '1px solid #333',
-                transition: 'all 0.3s ease',
-                cursor: 'pointer',
-                textAlign: 'center'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'translateY(-5px)';
-                e.currentTarget.style.borderColor = '#00b4d8';
-                e.currentTarget.style.boxShadow = '0 10px 30px rgba(0,180,216,0.2)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.borderColor = '#333';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-              onClick={() => window.location.href = '/explore'}
-              >
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '30px'
+              }}>
+                <h2 style={{ fontSize: '2rem', fontWeight: '600' }}>📈 Trending This Week</h2>
+                <Link to="/tmdb-movies?filter=trending" style={{ 
+                  color: '#ef4444', 
+                  textDecoration: 'none',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 20px',
-                  fontSize: '2.5rem'
+                  gap: '5px'
                 }}>
-                  👁️
-                </div>
-                <h3 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>Watch & Explore</h3>
-                <p style={{ color: '#aaa', marginBottom: '20px', lineHeight: '1.6' }}>
-                  Discover amazing content from creators around the world. Find your next favorite channel.
-                </p>
-                <div style={{ color: '#00b4d8', fontWeight: 'bold' }}>
-                  Browse Content →
-                </div>
+                  Explore All <span>→</span>
+                </Link>
               </div>
 
-              {/* Option 2: Create Channel (Popular) */}
               <div style={{
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '20px',
-                padding: '30px 25px',
-                border: '2px solid #00b4d8',
-                transition: 'all 0.3s ease',
-                cursor: 'pointer',
-                textAlign: 'center',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'translateY(-5px)';
-                e.currentTarget.style.boxShadow = '0 15px 40px rgba(0,180,216,0.3)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 5px 20px rgba(0,180,216,0.2)';
-              }}
-              onClick={() => window.location.href = '/register'}
-              >
-                {/* Popular Badge */}
-                <div style={{
-                  position: 'absolute',
-                  top: '15px',
-                  right: '-30px',
-                  background: 'linear-gradient(135deg, #FFD700, #FFA500)',
-                  color: 'black',
-                  padding: '5px 40px',
-                  transform: 'rotate(45deg)',
-                  fontSize: '0.8rem',
-                  fontWeight: 'bold'
-                }}>
-                  MOST POPULAR
-                </div>
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: '20px'
+              }}>
+                {trendingMovies.slice(0, 6).map(movie => (
+                  <Link
+                    key={movie.id}
+                    to={`/tmdb-movie/${movie.id}`}
+                    style={{ textDecoration: 'none', color: 'white' }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      gap: '15px',
+                      background: '#1f1f1f',
+                      borderRadius: '12px',
+                      padding: '15px',
+                      transition: 'transform 0.2s, background 0.2s'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = 'translateX(8px)';
+                      e.currentTarget.style.background = '#2d2d2d';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'translateX(0)';
+                      e.currentTarget.style.background = '#1f1f1f';
+                    }}>
+                      
+                      {/* Thumbnail */}
+                      <div style={{
+                        width: '80px',
+                        height: '120px',
+                        background: '#2d2d2d',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        flexShrink: 0
+                      }}>
+                        {movie.poster_path ? (
+                          <img
+                            src={getImageUrl(movie.poster_path)}
+                            alt={movie.title}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover'
+                            }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '2rem'
+                          }}>
+                            🎬
+                          </div>
+                        )}
+                      </div>
 
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #FFD700, #FFA500)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 20px',
-                  fontSize: '2.5rem'
-                }}>
-                  🎬
-                </div>
-                <h3 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>Create a Channel</h3>
-                <p style={{ color: '#aaa', marginBottom: '20px', lineHeight: '1.6' }}>
-                  Start your creator journey today. Build your audience and earn money from your passion.
-                </p>
-                <div style={{ 
-                  background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
-                  color: 'white',
-                  padding: '8px 20px',
-                  borderRadius: '30px',
-                  display: 'inline-block',
-                  fontWeight: 'bold'
-                }}>
-                  Sign Up Free →
-                </div>
-              </div>
-
-              {/* Option 3: Earn Money */}
-              <div style={{
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '20px',
-                padding: '30px 25px',
-                border: '1px solid #333',
-                transition: 'all 0.3s ease',
-                cursor: 'pointer',
-                textAlign: 'center'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'translateY(-5px)';
-                e.currentTarget.style.borderColor = '#4CAF50';
-                e.currentTarget.style.boxShadow = '0 10px 30px rgba(76,175,80,0.2)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.borderColor = '#333';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-              onClick={() => window.location.href = '/affiliate'}
-              >
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #4CAF50, #45a049)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 20px',
-                  fontSize: '2.5rem'
-                }}>
-                  💰
-                </div>
-                <h3 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>Earn Money</h3>
-                <p style={{ color: '#aaa', marginBottom: '20px', lineHeight: '1.6' }}>
-                  Join our MLM program and earn commissions from referrals. Make money while you sleep.
-                </p>
-                <div style={{ color: '#4CAF50', fontWeight: 'bold' }}>
-                  Learn About MLM →
-                </div>
+                      {/* Info */}
+                      <div style={{ flex: 1 }}>
+                        <h3 style={{
+                          margin: '0 0 8px 0',
+                          fontSize: '1rem',
+                          fontWeight: '600',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}>
+                          {movie.title}
+                        </h3>
+                        <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '5px' }}>
+                          {movie.release_date?.split('-')[0] || 'N/A'}
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                          {movie.vote_average > 0 && (
+                            <span style={{ color: '#fbbf24', fontSize: '0.9rem' }}>
+                              ⭐ {movie.vote_average.toFixed(1)}
+                            </span>
+                          )}
+                          <span style={{ color: '#ef4444', fontSize: '0.8rem' }}>
+                            #{movie.popularity?.toFixed(0)} trending
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </div>
             </div>
-          ) : (
-            /* Options for logged-in users */
+          </div>
+        )}
+
+        {/* ===== UPCOMING MOVIES SECTION ===== */}
+        {upcomingMovies.length > 0 && (
+          <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '60px 20px' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '30px'
+            }}>
+              <h2 style={{ fontSize: '2rem', fontWeight: '600' }}>🚀 Coming Soon</h2>
+              <Link to="/tmdb-movies?filter=upcoming" style={{ 
+                color: '#ef4444', 
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}>
+                View All <span>→</span>
+              </Link>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+              gap: '25px'
+            }}>
+              {upcomingMovies.map(movie => (
+                <Link
+                  key={movie.id}
+                  to={`/tmdb-movie/${movie.id}`}
+                  style={{ textDecoration: 'none', color: 'white' }}
+                >
+                  <div style={{
+                    background: '#1f1f1f',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    transition: 'transform 0.3s',
+                    position: 'relative'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-5px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                    
+                    {/* Poster */}
+                    <div style={{
+                      aspectRatio: '2/3',
+                      background: '#2d2d2d'
+                    }}>
+                      {movie.poster_path ? (
+                        <img
+                          src={getImageUrl(movie.poster_path)}
+                          alt={movie.title}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '3rem',
+                          color: '#666'
+                        }}>
+                          🎬
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Coming Soon Badge */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '10px',
+                      left: '10px',
+                      background: '#ef4444',
+                      color: 'white',
+                      padding: '5px 10px',
+                      borderRadius: '5px',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold'
+                    }}>
+                      COMING SOON
+                    </div>
+
+                    {/* Movie Info */}
+                    <div style={{ padding: '12px' }}>
+                      <h3 style={{
+                        margin: '0 0 5px 0',
+                        fontSize: '0.95rem',
+                        fontWeight: '600',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}>
+                        {movie.title}
+                      </h3>
+                      <p style={{ color: '#888', fontSize: '0.8rem' }}>
+                        {movie.release_date ? new Date(movie.release_date).toLocaleDateString() : 'Date TBA'}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ===== CALL TO ACTION SECTION ===== */}
+        <div style={{
+          background: 'linear-gradient(135deg, #ef4444, #dc2626, #3b82f6, #8b5cf6)',
+          backgroundSize: '300% 300%',
+          animation: 'gradientFlow 10s ease infinite',
+          padding: '100px 20px',
+          textAlign: 'center'
+        }}>
+          <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <h2 style={{ fontSize: '3rem', marginBottom: '20px', fontWeight: '700' }}>
+              Start Watching Today
+            </h2>
+            <p style={{ fontSize: '1.2rem', marginBottom: '40px', opacity: 0.9, lineHeight: '1.6' }}>
+              Join thousands of movie lovers watching free content on NexStream. 
+              No credit card required, just pure entertainment.
+            </p>
+            <Link
+              to="/tmdb-movies"
+              style={{
+                padding: '18px 50px',
+                background: 'white',
+                color: '#ef4444',
+                textDecoration: 'none',
+                borderRadius: '50px',
+                fontSize: '1.2rem',
+                fontWeight: '700',
+                display: 'inline-block',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
+              }}
+              onMouseEnter={e => {
+                e.target.style.transform = 'scale(1.05)';
+                e.target.style.boxShadow = '0 15px 40px rgba(0,0,0,0.3)';
+              }}
+              onMouseLeave={e => {
+                e.target.style.transform = 'scale(1)';
+                e.target.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+              }}
+            >
+              Browse Free Movies
+            </Link>
+          </div>
+        </div>
+
+        {/* ===== FOOTER ===== */}
+        <footer style={{
+          background: '#0a0a0a',
+          padding: '60px 20px 30px'
+        }}>
+          <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '15px'
+              gap: '40px',
+              marginBottom: '40px'
             }}>
-              
-              <button onClick={() => window.location.href = '/upload'}
-                style={{
-                  padding: '20px',
-                  background: 'rgba(0,180,216,0.1)',
-                  border: '1px solid #00b4d8',
-                  borderRadius: '15px',
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,180,216,0.2)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,180,216,0.1)'}
-              >
-                📤 Upload Content
-              </button>
-
-              <button onClick={() => window.location.href = '/channel-settings'}
-                style={{
-                  padding: '20px',
-                  background: 'rgba(255,215,0,0.1)',
-                  border: '1px solid #FFD700',
-                  borderRadius: '15px',
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,215,0,0.2)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,215,0,0.1)'}
-              >
-                ⚙️ Channel Settings
-              </button>
-
-              <button onClick={() => window.location.href = '/activities'}
-                style={{
-                  padding: '20px',
-                  background: 'rgba(76,175,80,0.1)',
-                  border: '1px solid #4CAF50',
-                  borderRadius: '15px',
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(76,175,80,0.2)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(76,175,80,0.1)'}
-              >
-                📊 View Analytics
-              </button>
-
-              <button onClick={() => window.location.href = '/affiliate'}
-                style={{
-                  padding: '20px',
-                  background: 'rgba(255,68,68,0.1)',
-                  border: '1px solid #ff4444',
-                  borderRadius: '15px',
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,68,68,0.2)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,68,68,0.1)'}
-              >
-                🤝 MLM Referrals
-              </button>
-            </div>
-          )}
-
-          {/* Trust Badges */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '30px',
-            marginTop: '40px',
-            color: '#666',
-            fontSize: '0.9rem',
-            flexWrap: 'wrap'
-          }}>
-            <span>🔒 Secure Payments</span>
-            <span>⚡ Instant Withdrawals</span>
-            <span>🌍 Global Community</span>
-            <span>🛡️ Creator Protection</span>
-          </div>
-        </div>
-
-        {/* Features Section */}
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto 60px',
-          padding: '0 20px'
-        }}>
-          <h2 style={{
-            fontSize: '2.5rem',
-            textAlign: 'center',
-            marginBottom: '40px',
-            background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
-          }}>
-            Everything You Need to Succeed
-          </h2>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: '30px'
-          }}>
-            {[
-              { icon: "🎬", title: "Sell Your Content", desc: "Upload movies, music, videos and games. Set your own prices and earn directly." },
-              { icon: "💬", title: "Real-Time Chat", desc: "Connect with fans instantly. WhatsApp-like messaging with media sharing." },
-              { icon: "👥", title: "Network Marketing", desc: "Built-in MLM system. Refer others and earn lifetime commissions." },
-              { icon: "💰", title: "Multiple Revenue Streams", desc: "Subscriptions, rentals, one-time purchases, tips, and affiliate sales." }
-            ].map((feature, index) => (
-              <div key={index} style={{
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '15px',
-                padding: '30px 20px',
-                textAlign: 'center',
-                border: '1px solid #333',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'translateY(-5px)';
-                e.currentTarget.style.borderColor = '#00b4d8';
-                e.currentTarget.style.boxShadow = '0 10px 30px rgba(0,180,216,0.2)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.borderColor = '#333';
-              }}
-              >
-                <div style={{ fontSize: '3rem', marginBottom: '15px' }}>{feature.icon}</div>
-                <h3 style={{ marginBottom: '10px' }}>{feature.title}</h3>
-                <p style={{ color: '#888', lineHeight: '1.6' }}>{feature.desc}</p>
+              <div>
+                <h3 style={{ color: '#ef4444', marginBottom: '20px', fontSize: '1.5rem' }}>NexStream</h3>
+                <p style={{ color: '#888', lineHeight: '1.6' }}>
+                  Your ultimate destination for free movies and entertainment. Watch anywhere, anytime.
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* CTA Section */}
-        <div style={{
-          background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
-          padding: '60px 20px',
-          textAlign: 'center'
-        }}>
-          <h2 style={{ fontSize: '2.5rem', marginBottom: '20px' }}>Ready to Start?</h2>
-          <p style={{ fontSize: '1.2rem', marginBottom: '30px', opacity: 0.9 }}>
-            Join thousands of creators already earning on NexStream
-          </p>
-          <Link
-            to={user ? '/create-channel' : '/register'}
-            style={{
-              padding: '15px 40px',
-              background: 'white',
-              color: '#0077b6',
-              textDecoration: 'none',
-              borderRadius: '50px',
-              fontSize: '1.2rem',
-              fontWeight: 'bold',
-              display: 'inline-block',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseEnter={e => {
-              e.target.style.transform = 'scale(1.05)';
-              e.target.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
-            }}
-            onMouseLeave={e => {
-              e.target.style.transform = 'scale(1)';
-              e.target.style.boxShadow = 'none';
-            }}
-          >
-            {user ? 'Create Your Channel' : 'Get Started Free'}
-          </Link>
-        </div>
-
-        {/* Footer */}
-        <footer style={{
-          background: '#0a0f1e',
-          padding: '40px 20px',
-          borderTop: '1px solid #1e2a3a'
-        }}>
-          <div style={{
-            maxWidth: '1200px',
-            margin: '0 auto',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '40px'
-          }}>
-            <div>
-              <h3 style={{ color: '#00b4d8', marginBottom: '20px' }}>NexStream</h3>
-              <p style={{ color: '#888', lineHeight: '1.6' }}>
-                Empowering creators to build sustainable businesses through digital content and community.
+              <div>
+                <h4 style={{ color: 'white', marginBottom: '20px' }}>Movies</h4>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  <li style={{ marginBottom: '10px' }}>
+                    <Link to="/tmdb-movies?filter=popular" style={{ color: '#888', textDecoration: 'none' }}>Popular</Link>
+                  </li>
+                  <li style={{ marginBottom: '10px' }}>
+                    <Link to="/tmdb-movies?filter=trending" style={{ color: '#888', textDecoration: 'none' }}>Trending</Link>
+                  </li>
+                  <li style={{ marginBottom: '10px' }}>
+                    <Link to="/tmdb-movies?filter=upcoming" style={{ color: '#888', textDecoration: 'none' }}>Upcoming</Link>
+                  </li>
+                  <li style={{ marginBottom: '10px' }}>
+                    <Link to="/tmdb-movies?filter=top_rated" style={{ color: '#888', textDecoration: 'none' }}>Top Rated</Link>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4 style={{ color: 'white', marginBottom: '20px' }}>Company</h4>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  <li style={{ marginBottom: '10px' }}><Link to="/about" style={{ color: '#888', textDecoration: 'none' }}>About</Link></li>
+                  <li style={{ marginBottom: '10px' }}><Link to="/contact" style={{ color: '#888', textDecoration: 'none' }}>Contact</Link></li>
+                  <li style={{ marginBottom: '10px' }}><Link to="/terms" style={{ color: '#888', textDecoration: 'none' }}>Terms</Link></li>
+                  <li style={{ marginBottom: '10px' }}><Link to="/privacy" style={{ color: '#888', textDecoration: 'none' }}>Privacy</Link></li>
+                </ul>
+              </div>
+            </div>
+            <div style={{
+              textAlign: 'center',
+              paddingTop: '30px',
+              borderTop: '1px solid #1f1f1f',
+              color: '#888'
+            }}>
+              <p>&copy; 2026 NexStream. All rights reserved.</p>
+              <p style={{ marginTop: '10px', fontSize: '0.8rem' }}>
+                Movie data provided by TMDb
               </p>
             </div>
-            <div>
-              <h4 style={{ marginBottom: '15px' }}>Platform</h4>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                <li style={{ marginBottom: '10px' }}><Link to="/explore" style={{ color: '#888', textDecoration: 'none' }}>Explore</Link></li>
-                <li style={{ marginBottom: '10px' }}><Link to="/channels" style={{ color: '#888', textDecoration: 'none' }}>Channels</Link></li>
-                <li style={{ marginBottom: '10px' }}><Link to="/trending" style={{ color: '#888', textDecoration: 'none' }}>Trending</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 style={{ marginBottom: '15px' }}>Creator</h4>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                <li style={{ marginBottom: '10px' }}><Link to="/create-channel" style={{ color: '#888', textDecoration: 'none' }}>Start Channel</Link></li>
-                <li style={{ marginBottom: '10px' }}><Link to="/upload" style={{ color: '#888', textDecoration: 'none' }}>Upload</Link></li>
-                <li style={{ marginBottom: '10px' }}><Link to="/affiliate" style={{ color: '#888', textDecoration: 'none' }}>MLM Program</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 style={{ marginBottom: '15px' }}>Legal</h4>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                <li style={{ marginBottom: '10px' }}><Link to="/guidelines" style={{ color: '#888', textDecoration: 'none' }}>Guidelines</Link></li>
-                <li style={{ marginBottom: '10px' }}><Link to="/terms" style={{ color: '#888', textDecoration: 'none' }}>Terms</Link></li>
-                <li style={{ marginBottom: '10px' }}><Link to="/privacy" style={{ color: '#888', textDecoration: 'none' }}>Privacy</Link></li>
-              </ul>
-            </div>
-          </div>
-          <div style={{
-            textAlign: 'center',
-            marginTop: '40px',
-            paddingTop: '20px',
-            borderTop: '1px solid #1e2a3a',
-            color: '#666'
-          }}>
-            © 2026 NexStream. All rights reserved.
           </div>
         </footer>
       </div>
 
-      {/* AI Assistant Widget */}
-      <AIHomeWidget />
-
-      {/* Animation styles */}
+      {/* ===== ANIMATION STYLES ===== */}
       <style>
         {`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+          
           @keyframes float {
             0%, 100% { transform: translate(0, 0) scale(1); }
             33% { transform: translate(30px, -30px) scale(1.1); }
             66% { transform: translate(-20px, 20px) scale(0.9); }
-          }
-          
-          @keyframes waveFlow {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-          
-          @keyframes waveFlowReverse {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
-          }
-          
-          @keyframes floatParticle {
-            0% { transform: translateY(0) translateX(0); opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { transform: translateY(-100vh) translateX(100px); opacity: 0; }
           }
           
           @keyframes gradientFlow {
@@ -743,14 +790,20 @@ const Home = () => {
             100% { background-position: 0% 50%; }
           }
           
-          @keyframes glow {
-            0%, 100% { box-shadow: 0 0 20px rgba(0,180,216,0.2); }
-            50% { box-shadow: 0 0 40px rgba(0,180,216,0.4); }
+          @keyframes fadeInUp {
+            from {
+              opacity: 0;
+              transform: translateY(30px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
           }
           
           @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9; }
           }
         `}
       </style>

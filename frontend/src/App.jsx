@@ -1,43 +1,59 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import Home from './pages/Home';
-import Register from './pages/Register';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import CreateChannel from './pages/CreateChannel';
-import Channel from './pages/Channel';
-import Upload from './pages/Upload';
-import Content from './pages/Content';
-import Payment from './pages/Payment';
-import PaymentSuccess from './pages/PaymentSuccess';
-import Affiliate from './pages/Affiliate';
-import SubAdminPanel from './pages/SubAdminPanel';
-import SuperAdmin from './pages/SuperAdmin';
-import Chat from './pages/Chat';
-import SimpleChat from './pages/SimpleChat';
-import AIAssistant from './pages/AIAssistant';
+
+// Public Pages
+import Home from './pages/public/Home';
+import Login from './pages/public/Login';
+import Register from './pages/public/Register';
+
+// Content Pages
+import Movies from './pages/movies/Movies';
+import MovieDetail from './pages/movies/MovieDetail';
+import Music from './pages/music/Music';
+import Games from './pages/games/Games';
+
+// User Pages
+import Dashboard from './pages/user/Dashboard';
+import Network from './pages/user/Network';
+import Wallet from './pages/user/Wallet';
+import Chat from './pages/user/Chat';
+import AIAssistant from './pages/user/AIAssistant';
+
+// Business Pages
+import BusinessDashboard from './pages/business/BusinessDashboard';
+
+// Admin Pages
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 function App() {
   return (
     <Router>
       <AuthProvider>
         <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<Home />} />
-          <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+
+          {/* Content Routes */}
+          <Route path="/movies" element={<Movies />} />
+          <Route path="/movie/:id" element={<MovieDetail />} />
+          <Route path="/music" element={<Music />} />
+          <Route path="/games" element={<Games />} />
+
+          {/* User Routes */}
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/create-channel" element={<CreateChannel />} />
-          <Route path="/channel/:slug" element={<Channel />} />
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/content/:id" element={<Content />} />
-          <Route path="/payment" element={<Payment />} />
-          <Route path="/payment-success" element={<PaymentSuccess />} />
-          <Route path="/affiliate" element={<Affiliate />} />
-          <Route path="/sub-admin" element={<SubAdminPanel />} />
-          <Route path="/super-admin" element={<SuperAdmin />} />
-<Route path="/ai-assistant" element={<AIAssistant />} />
-         <Route path="/chat" element={<SimpleChat />} />
+          <Route path="/network" element={<Network />} />
+          <Route path="/wallet" element={<Wallet />} />
+          <Route path="/chat" element={<Chat />} />
+          <Route path="/ai-assistant" element={<AIAssistant />} />
+
+          {/* Business Routes */}
+          <Route path="/business" element={<BusinessDashboard />} />
+
+          {/* Admin Routes */}
+          <Route path="/admin" element={<AdminDashboard />} />
         </Routes>
       </AuthProvider>
     </Router>
