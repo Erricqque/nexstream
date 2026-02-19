@@ -13,7 +13,6 @@ const Games = () => {
   const [gameError, setGameError] = useState(false);
   const [gameLoading, setGameLoading] = useState(false);
 
-  // Load games on component mount
   useEffect(() => {
     try {
       console.log('Loading Nexstream games...');
@@ -35,7 +34,6 @@ const Games = () => {
     }
   }, []);
 
-  // Filter games when category or search changes
   useEffect(() => {
     try {
       let filteredGames = [];
@@ -160,14 +158,13 @@ const Games = () => {
                 <button
                   onClick={closeGame}
                   style={{
-                    background: 'none',
+                    background: '#3d3d3d',
                     border: 'none',
                     color: 'white',
                     fontSize: '24px',
                     cursor: 'pointer',
                     padding: '8px 16px',
-                    borderRadius: '8px',
-                    background: '#3d3d3d'
+                    borderRadius: '8px'
                   }}
                 >
                   ✕
@@ -182,7 +179,6 @@ const Games = () => {
                 overflow: 'hidden',
                 background: '#000'
               }}>
-                {/* Loading Spinner */}
                 {gameLoading && (
                   <div style={{
                     position: 'absolute',
@@ -207,7 +203,6 @@ const Games = () => {
                   </div>
                 )}
 
-                {/* Error Message */}
                 {gameError && (
                   <div style={{
                     position: 'absolute',
@@ -264,7 +259,6 @@ const Games = () => {
                   </div>
                 )}
 
-                {/* Game Iframe */}
                 {!gameError && (
                   <iframe
                     src={selectedGame.embedUrl}
@@ -477,7 +471,6 @@ const Games = () => {
                 transition: 'all 0.2s'
               }}
             >
-              {/* Game Thumbnail */}
               <div style={{
                 height: '160px',
                 background: 'linear-gradient(135deg, #2d2d2d, #1f1f1f)',
@@ -504,7 +497,6 @@ const Games = () => {
                 )}
               </div>
 
-              {/* Game Info */}
               <div style={{ padding: '20px' }}>
                 <h3 style={{ margin: '0 0 8px 0' }}>{game.title}</h3>
                 <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '15px' }}>

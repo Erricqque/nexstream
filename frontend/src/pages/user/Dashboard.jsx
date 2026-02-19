@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { statsService } from '../services/statsService';
-import { supabase } from '../lib/supabase';
+import { statsService } from '../../services/statsService';
+import { supabase } from '../../lib/supabase';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -16,12 +16,10 @@ const Dashboard = () => {
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        // Get current user
         const { data: { user } } = await supabase.auth.getUser();
         setUser(user);
         
         if (user) {
-          // Get user stats
           const userStats = await statsService.getUserStats(user.id);
           setStats(userStats);
         }
@@ -66,7 +64,6 @@ const Dashboard = () => {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Welcome Header */}
         <div style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           borderRadius: '20px',
@@ -81,14 +78,12 @@ const Dashboard = () => {
           </p>
         </div>
 
-        {/* Stats Grid */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
           gap: '30px',
           marginBottom: '40px'
         }}>
-          {/* Content Stats */}
           <motion.div
             whileHover={{ y: -5 }}
             style={{
@@ -106,7 +101,6 @@ const Dashboard = () => {
             <p style={{ color: '#666', marginTop: '10px' }}>pieces uploaded</p>
           </motion.div>
 
-          {/* Views Stats */}
           <motion.div
             whileHover={{ y: -5 }}
             style={{
@@ -124,7 +118,6 @@ const Dashboard = () => {
             <p style={{ color: '#666', marginTop: '10px' }}>across all content</p>
           </motion.div>
 
-          {/* Earnings Stats */}
           <motion.div
             whileHover={{ y: -5 }}
             style={{
@@ -143,7 +136,6 @@ const Dashboard = () => {
           </motion.div>
         </div>
 
-        {/* Quick Actions */}
         <div style={{
           background: '#1a1a1a',
           borderRadius: '20px',

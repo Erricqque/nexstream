@@ -59,7 +59,6 @@ const SuperAdmin = () => {
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <h1 style={{ fontSize: '2.5rem', marginBottom: '40px' }}>Admin Dashboard</h1>
         
-        {/* Stats Grid */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
@@ -131,7 +130,6 @@ const SuperAdmin = () => {
           </motion.div>
         </div>
 
-        {/* Recent Activity */}
         <div style={{
           background: '#1a1a1a',
           borderRadius: '15px',
