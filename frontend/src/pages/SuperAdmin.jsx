@@ -1,30 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { statsService } from '../services/statsService';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
-const SuperAdmin = () => {
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalContent: 0,
-    totalViews: 0,
-    totalRevenue: 0
-  });
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadAdminStats = async () => {
-      try {
-        const adminStats = await statsService.getAdminStats();
-        setStats(adminStats);
-      } catch (error) {
-        console.error('Error loading admin stats:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadAdminStats();
+    checkUser();
   }, []);
+
+  const checkUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate('/login');
+        return;
+      }
+      setUser(user);
+      await loadProfile(user.id);
+      await loadVideos(user.id);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadProfile = async (userId) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    setProfile(data);
+  };
+
+  const loadVideos = async (userId) => {
+    const { data } = await supabase
+      .from('content')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    setVideos(data || []);
+  };
 
   if (loading) {
     return (
@@ -33,16 +55,10 @@ const SuperAdmin = () => {
         background: '#0f0f0f',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        color: 'white'
       }}>
-        <div style={{
-          width: '60px',
-          height: '60px',
-          border: '4px solid #ef4444',
-          borderTopColor: 'transparent',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
+        <div>Loading...</div>
       </div>
     );
   }
@@ -51,99 +67,64 @@ const SuperAdmin = () => {
     <div style={{
       minHeight: '100vh',
       background: '#0f0f0f',
-      color: 'white',
-      padding: '40px 20px'
+      color: 'white'
     }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{
+        height: '150px',
+        background: 'linear-gradient(135deg, #ff3366, #4facfe)'
+      }} />
       
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '40px' }}>Admin Dashboard</h1>
-        
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          display: 'flex',
+          alignItems: 'center',
           gap: '30px',
-          marginBottom: '40px'
+          marginTop: '-50px'
         }}>
-          <motion.div
-            whileHover={{ y: -5 }}
-            style={{
-              background: '#1a1a1a',
-              borderRadius: '15px',
-              padding: '30px',
-              border: '1px solid #333'
-            }}
-          >
-            <div style={{ fontSize: '2.5rem', marginBottom: '15px' }}>👥</div>
-            <h3 style={{ color: '#888', marginBottom: '10px' }}>Total Users</h3>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#667eea' }}>
-              {stats.totalUsers.toLocaleString()}
-            </div>
-          </motion.div>
-
-          <motion.div
-            whileHover={{ y: -5 }}
-            style={{
-              background: '#1a1a1a',
-              borderRadius: '15px',
-              padding: '30px',
-              border: '1px solid #333'
-            }}
-          >
-            <div style={{ fontSize: '2.5rem', marginBottom: '15px' }}>📄</div>
-            <h3 style={{ color: '#888', marginBottom: '10px' }}>Total Content</h3>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#10b981' }}>
-              {stats.totalContent.toLocaleString()}
-            </div>
-          </motion.div>
-
-          <motion.div
-            whileHover={{ y: -5 }}
-            style={{
-              background: '#1a1a1a',
-              borderRadius: '15px',
-              padding: '30px',
-              border: '1px solid #333'
-            }}
-          >
-            <div style={{ fontSize: '2.5rem', marginBottom: '15px' }}>👁️</div>
-            <h3 style={{ color: '#888', marginBottom: '10px' }}>Total Views</h3>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#f59e0b' }}>
-              {stats.totalViews.toLocaleString()}
-            </div>
-          </motion.div>
-
-          <motion.div
-            whileHover={{ y: -5 }}
-            style={{
-              background: '#1a1a1a',
-              borderRadius: '15px',
-              padding: '30px',
-              border: '1px solid #333'
-            }}
-          >
-            <div style={{ fontSize: '2.5rem', marginBottom: '15px' }}>💰</div>
-            <h3 style={{ color: '#888', marginBottom: '10px' }}>Total Revenue</h3>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ef4444' }}>
-              ${stats.totalRevenue.toFixed(2)}
-            </div>
-          </motion.div>
+          <div style={{
+            width: '100px',
+            height: '100px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #ff3366, #4facfe)',
+            border: '4px solid #0f0f0f'
+          }} />
+          <div>
+            <h1>{profile?.username || user?.email?.split('@')[0]}</h1>
+            <p style={{ color: '#888' }}>{videos.length} videos</p>
+          </div>
         </div>
 
-        <div style={{
-          background: '#1a1a1a',
-          borderRadius: '15px',
-          padding: '30px',
-          border: '1px solid #333'
-        }}>
-          <h2 style={{ marginBottom: '20px' }}>Platform Overview</h2>
-          <p style={{ color: '#888' }}>
-            All stats are pulled directly from your database in real-time.
-          </p>
-        </div>
+        <h2 style={{ marginTop: '40px', marginBottom: '20px' }}>Your Videos</h2>
+        
+        {videos.length === 0 ? (
+          <p style={{ color: '#888' }}>No videos yet</p>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+            gap: '20px'
+          }}>
+            {videos.map(video => (
+              <div key={video.id} style={{
+                background: '#1a1a1a',
+                borderRadius: '10px',
+                padding: '15px'
+              }}>
+                <div style={{
+                  height: '140px',
+                  background: '#2a2a2a',
+                  borderRadius: '5px',
+                  marginBottom: '10px'
+                }} />
+                <h3>{video.title}</h3>
+                <p style={{ color: '#888' }}>{video.views_count || 0} views</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default SuperAdmin;
+export default Dashboard;

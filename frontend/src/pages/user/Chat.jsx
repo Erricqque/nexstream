@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { io } from 'socket.io-client';
+// import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:3001');
+// Socket is disabled for now - will be re-enabled when backend is ready
+// const socket = io('http://localhost:3001');
 
 const Chat = () => {
   const { user } = useAuth();
@@ -21,34 +22,35 @@ const Chat = () => {
       loadUsers();
       loadConversations();
       
-      socket.emit('user-connected', user.id);
+      // Socket disabled for now
+      // socket.emit('user-connected', user.id);
 
-      socket.on('receive-message', (message) => {
-        if (message.receiver_id === user.id || message.sender_id === user.id) {
-          setMessages(prev => [...prev, message]);
-          scrollToBottom();
-        }
-      });
+      // socket.on('receive-message', (message) => {
+      //   if (message.receiver_id === user.id || message.sender_id === user.id) {
+      //     setMessages(prev => [...prev, message]);
+      //     scrollToBottom();
+      //   }
+      // });
 
-      socket.on('typing', ({ userId, isTyping }) => {
-        if (userId === selectedChat?.id) {
-          setTyping(isTyping);
-        }
-      });
+      // socket.on('typing', ({ userId, isTyping }) => {
+      //   if (userId === selectedChat?.id) {
+      //     setTyping(isTyping);
+      //   }
+      // });
 
-      socket.on('user-status', ({ userId, online }) => {
-        setUsers(prev => prev.map(u => 
-          u.id === userId ? { ...u, online } : u
-        ));
-      });
+      // socket.on('user-status', ({ userId, online }) => {
+      //   setUsers(prev => prev.map(u => 
+      //     u.id === userId ? { ...u, online } : u
+      //   ));
+      // });
     }
 
-    return () => {
-      socket.off('receive-message');
-      socket.off('typing');
-      socket.off('user-status');
-    };
-  }, [user, selectedChat]);
+    // return () => {
+    //   socket.off('receive-message');
+    //   socket.off('typing');
+    //   socket.off('user-status');
+    // };
+  }, [user]); // Removed selectedChat dependency since socket is disabled
 
   useEffect(() => {
     scrollToBottom();
@@ -57,20 +59,20 @@ const Chat = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      console.log('Loading users for chat, current user:', user.id);
+      console.log('Loading users for chat, current user:', user?.id);
       
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .neq('id', user.id);  // Load all users EXCEPT current user
+        .neq('id', user?.id);  // Load all users EXCEPT current user
       
       if (error) {
         console.error('Error loading users:', error);
       } else {
         console.log('Loaded users:', data);
-        // Add online status (mock for now - socket will update)
-        const usersWithStatus = data.map(u => ({ ...u, online: false }));
-        setUsers(usersWithStatus || []);
+        // Add online status (all offline since socket is disabled)
+        const usersWithStatus = data?.map(u => ({ ...u, online: false })) || [];
+        setUsers(usersWithStatus);
       }
     } catch (error) {
       console.error('Exception loading users:', error);
@@ -80,6 +82,8 @@ const Chat = () => {
   };
 
   const loadConversations = async () => {
+    if (!user?.id) return;
+    
     try {
       const { data, error } = await supabase
         .from('messages')
@@ -114,6 +118,8 @@ const Chat = () => {
   const selectUser = async (otherUser) => {
     setSelectedChat(otherUser);
     
+    if (!user?.id) return;
+    
     try {
       const { data, error } = await supabase
         .from('messages')
@@ -134,14 +140,15 @@ const Chat = () => {
         .eq('receiver_id', user.id)
         .eq('sender_id', otherUser.id);
 
-      socket.emit('join-chat', { userId: user.id, receiverId: otherUser.id });
+      // Socket disabled for now
+      // socket.emit('join-chat', { userId: user.id, receiverId: otherUser.id });
     } catch (error) {
       console.error('Error in selectUser:', error);
     }
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedChat) return;
+    if (!newMessage.trim() || !selectedChat || !user?.id) return;
 
     const message = {
       sender_id: user.id,
@@ -164,7 +171,7 @@ const Chat = () => {
       }
 
       setMessages(prev => [...prev, data]);
-      socket.emit('send-message', data);
+      // socket.emit('send-message', data); // Disabled for now
       setNewMessage('');
       
       // Update conversations list
@@ -175,19 +182,20 @@ const Chat = () => {
   };
 
   const handleTyping = () => {
-    socket.emit('typing', {
-      userId: user.id,
-      receiverId: selectedChat?.id,
-      isTyping: true
-    });
+    // Socket disabled for now
+    // socket.emit('typing', {
+    //   userId: user.id,
+    //   receiverId: selectedChat?.id,
+    //   isTyping: true
+    // });
 
-    setTimeout(() => {
-      socket.emit('typing', {
-        userId: user.id,
-        receiverId: selectedChat?.id,
-        isTyping: false
-      });
-    }, 1000);
+    // setTimeout(() => {
+    //   socket.emit('typing', {
+    //     userId: user.id,
+    //     receiverId: selectedChat?.id,
+    //     isTyping: false
+    //   });
+    // }, 1000);
   };
 
   const scrollToBottom = () => {
@@ -245,7 +253,7 @@ const Chat = () => {
         }}>
           <h2 style={{ margin: 0 }}>Chats</h2>
           <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.8rem' }}>
-            {users.length} user{users.length !== 1 ? 's' : ''} online
+            {users.length} user{users.length !== 1 ? 's' : ''} total
           </p>
         </div>
 
@@ -315,7 +323,7 @@ const Chat = () => {
                   </h4>
                   <p style={{
                     margin: 0,
-                    color: u.online ? '#4CAF50' : '#888',
+                    color: '#888',
                     fontSize: '0.8rem'
                   }}>
                     {u.online ? 'Online' : 'Offline'}
@@ -356,7 +364,7 @@ const Chat = () => {
                 </h3>
                 <p style={{
                   margin: '5px 0 0 0',
-                  color: selectedChat.online ? '#4CAF50' : '#888',
+                  color: '#888',
                   fontSize: '0.8rem'
                 }}>
                   {selectedChat.online ? 'Online' : 'Offline'}
@@ -387,14 +395,14 @@ const Chat = () => {
                     key={msg.id}
                     style={{
                       display: 'flex',
-                      justifyContent: msg.sender_id === user.id ? 'flex-end' : 'flex-start'
+                      justifyContent: msg.sender_id === user?.id ? 'flex-end' : 'flex-start'
                     }}
                   >
                     <div style={{
                       maxWidth: '70%',
                       padding: '10px 15px',
-                      background: msg.sender_id === user.id ? '#ef4444' : '#2d2d2d',
-                      borderRadius: msg.sender_id === user.id
+                      background: msg.sender_id === user?.id ? '#ef4444' : '#2d2d2d',
+                      borderRadius: msg.sender_id === user?.id
                         ? '18px 18px 4px 18px'
                         : '18px 18px 18px 4px',
                       color: 'white',

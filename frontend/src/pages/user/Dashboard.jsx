@@ -1,190 +1,130 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
-import { statsService } from '../../services/statsService';
+import { useAuth } from '../../context/AuthContext';
+import PlaylistCard from '../../components/playlists/PlaylistCard';
+
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [content, setContent] = useState([]);
-  const [stats, setStats] = useState({
-    totalViews: 0,
+  const [playlists, setPlaylists] = useState([]);
+  const [mlmStats, setMlmStats] = useState({
+    totalReferrals: 0,
     totalEarnings: 0,
-    totalLikes: 0,
-    totalDownloads: 0
+    pendingCommissions: 0
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('content');
-  const [selectedContent, setSelectedContent] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [contentToDelete, setContentToDelete] = useState(null);
 
   useEffect(() => {
-    checkUser();
-  }, []);
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    loadDashboardData();
+  }, [user]);
 
-  const checkUser = async () => {
+  const loadDashboardData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-      setUser(user);
-      await loadUserProfile(user.id);
-      await loadUserContent(user.id);
-      await loadUserStats(user.id);
+      setLoading(true);
+
+      // Load profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      setProfile(profileData);
+
+      // Load user content
+      const { data: contentData } = await supabase
+        .from('content')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      setContent(contentData || []);
+
+      // Load playlists
+      const { data: playlistData } = await supabase
+        .from('playlists')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      setPlaylists(playlistData || []);
+
+      // Load MLM stats
+      const { data: referralsData } = await supabase
+        .from('referrals')
+        .select('*')
+        .eq('referrer_id', user.id);
+
+      const { data: earningsData } = await supabase
+        .from('mlm_earnings')
+        .select('*')
+        .eq('user_id', user.id);
+
+      const totalEarned = earningsData?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+      const pending = earningsData?.filter(e => e.status === 'pending')
+        .reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+
+      setMlmStats({
+        totalReferrals: referralsData?.length || 0,
+        totalEarnings: totalEarned,
+        pendingCommissions: pending
+      });
+
     } catch (error) {
-      console.error('Error checking user:', error);
+      console.error('Error loading dashboard:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadUserProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      setProfile(data || { username: user?.email?.split('@')[0] });
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    }
+  const formatNumber = (num) => {
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toString();
   };
 
-  const loadUserContent = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('content')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Get public URLs for each content item
-      const contentWithUrls = await Promise.all((data || []).map(async (item) => {
-        const { data: fileData } = supabase.storage
-          .from('content')
-          .getPublicUrl(item.file_url);
-
-        let thumbnailUrl = null;
-        if (item.thumbnail_url) {
-          const { data: thumbData } = supabase.storage
-            .from('content')
-            .getPublicUrl(item.thumbnail_url);
-          thumbnailUrl = thumbData.publicUrl;
-        }
-
-        return {
-          ...item,
-          publicUrl: fileData.publicUrl,
-          thumbnailUrl
-        };
-      }));
-
-      setContent(contentWithUrls);
-    } catch (error) {
-      console.error('Error loading content:', error);
-    }
+  const spacing = {
+    xs: '4px',
+    sm: '8px',
+    md: '16px',
+    lg: '24px',
+    xl: '32px'
   };
 
-  const loadUserStats = async (userId) => {
-    try {
-      const userStats = await statsService.getUserStats(userId);
-      
-      // Calculate totals from content
-      const totalViews = content.reduce((sum, item) => sum + (item.views_count || 0), 0);
-      const totalDownloads = content.reduce((sum, item) => sum + (item.downloads_count || 0), 0);
-      const totalLikes = content.reduce((sum, item) => sum + (item.likes_count || 0), 0);
-
-      setStats({
-        totalViews: userStats.views || totalViews,
-        totalEarnings: userStats.earnings || 0,
-        totalLikes,
-        totalDownloads
-      });
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
-
-  const handleDeleteContent = async () => {
-    if (!contentToDelete) return;
-
-    try {
-      // Delete from storage
-      if (contentToDelete.file_url) {
-        await supabase.storage
-          .from('content')
-          .remove([contentToDelete.file_url]);
-      }
-
-      if (contentToDelete.thumbnail_url) {
-        await supabase.storage
-          .from('content')
-          .remove([contentToDelete.thumbnail_url]);
-      }
-
-      // Delete from database
-      const { error } = await supabase
-        .from('content')
-        .delete()
-        .eq('id', contentToDelete.id);
-
-      if (error) throw error;
-
-      // Update local state
-      setContent(content.filter(item => item.id !== contentToDelete.id));
-      setShowDeleteConfirm(false);
-      setContentToDelete(null);
-    } catch (error) {
-      console.error('Error deleting content:', error);
-    }
-  };
-
-  const getIconForType = (type) => {
-    switch(type) {
-      case 'video': return '🎬';
-      case 'music': return '🎵';
-      case 'game': return '🎮';
-      case 'image': return '🖼️';
-      case 'document': return '📄';
-      default: return '📁';
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'approved': return '#43e97b';
-      case 'pending': return '#f59e0b';
-      case 'rejected': return '#ff3366';
-      default: return '#888';
-    }
+  const fontSize = {
+    xs: '0.75rem',
+    sm: '0.875rem',
+    md: '1rem',
+    lg: '1.25rem',
+    xl: '1.5rem'
   };
 
   if (loading) {
     return (
       <div style={{
         minHeight: '100vh',
-        background: '#0a0a0f',
+        background: '#0f0f0f',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
         <div style={{
-          width: '60px',
-          height: '60px',
-          border: '4px solid #ff3366',
+          width: '50px',
+          height: '50px',
+          border: '4px solid #FF3366',
           borderTopColor: 'transparent',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
-        }}></div>
+        }} />
       </div>
     );
   }
@@ -192,584 +132,394 @@ const Dashboard = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0a0a0f',
+      background: '#0f0f0f',
       color: 'white',
-      padding: '40px 20px'
+      fontFamily: 'Inter, sans-serif'
     }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        {/* Header with Profile */}
-        <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,51,102,0.1), rgba(79,172,254,0.1))',
-            borderRadius: '30px',
-            padding: '40px',
-            marginBottom: '40px',
-            border: '1px solid rgba(255,255,255,0.05)',
-            backdropFilter: 'blur(10px)'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '30px', flexWrap: 'wrap' }}>
-            {/* Avatar */}
-            <div style={{
-              width: '100px',
-              height: '100px',
-              borderRadius: '50%',
-              background: profile?.avatar_url 
-                ? `url(${profile.avatar_url}) center/cover`
-                : 'linear-gradient(135deg, #ff3366, #4facfe)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2.5rem',
-              boxShadow: '0 10px 30px rgba(255,51,102,0.3)'
-            }}>
-              {!profile?.avatar_url && '👤'}
-            </div>
+      {/* Header Banner */}
+      <div style={{
+        height: '150px',
+        background: 'linear-gradient(135deg, #FF3366, #4FACFE)',
+        position: 'relative'
+      }} />
 
-            {/* User Info */}
-            <div style={{ flex: 1 }}>
-              <h1 style={{ fontSize: '2.5rem', marginBottom: '5px' }}>
-                {profile?.username || user?.email?.split('@')[0] || 'Creator'}
-              </h1>
-              <p style={{ color: '#888', marginBottom: '15px' }}>{user?.email}</p>
-              
-              {/* Quick Stats */}
-              <div style={{ display: 'flex', gap: '30px' }}>
-                <div>
-                  <span style={{ color: '#ff3366', fontWeight: 'bold' }}>{content.length}</span>
-                  <span style={{ color: '#888', marginLeft: '5px' }}>uploads</span>
-                </div>
-                <div>
-                  <span style={{ color: '#4facfe', fontWeight: 'bold' }}>{stats.totalViews.toLocaleString()}</span>
-                  <span style={{ color: '#888', marginLeft: '5px' }}>views</span>
-                </div>
-                <div>
-                  <span style={{ color: '#43e97b', fontWeight: 'bold' }}>${stats.totalEarnings.toFixed(2)}</span>
-                  <span style={{ color: '#888', marginLeft: '5px' }}>earned</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Upload Button */}
-            <Link to="/upload">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  padding: '15px 30px',
-                  background: 'linear-gradient(135deg, #ff3366, #4facfe)',
-                  border: 'none',
-                  borderRadius: '30px',
-                  color: 'white',
-                  fontSize: '1.1rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}
-              >
-                <span>+</span> Upload New
-              </motion.button>
-            </Link>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: `0 ${spacing.xl}` }}>
+        {/* Profile Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: spacing.lg,
+          marginTop: '-50px',
+          marginBottom: spacing.xl,
+          flexWrap: 'wrap'
+        }}>
+          <div style={{
+            width: '100px',
+            height: '100px',
+            borderRadius: '50%',
+            background: profile?.avatar_url 
+              ? `url(${profile.avatar_url}) center/cover`
+              : 'linear-gradient(135deg, #FF3366, #4FACFE)',
+            border: '4px solid #0f0f0f'
+          }} />
+          <div style={{ flex: 1 }}>
+            <h1 style={{ fontSize: fontSize.xl, marginBottom: spacing.xs }}>
+              {profile?.username || user?.email?.split('@')[0]}
+            </h1>
+            <p style={{ color: '#888' }}>
+              {content.length} videos • {playlists.length} playlists
+            </p>
           </div>
-        </motion.div>
+          <Link to="/settings">
+            <button style={{
+              padding: `${spacing.sm} ${spacing.lg}`,
+              background: '#2a2a2a',
+              border: '1px solid #333',
+              borderRadius: '20px',
+              color: 'white',
+              cursor: 'pointer'
+            }}>
+              Edit Profile
+            </button>
+          </Link>
+        </div>
+
+        {/* Stats Cards */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: spacing.md,
+          marginBottom: spacing.xl
+        }}>
+          <StatCard
+            icon="👁️"
+            title="Total Views"
+            value={formatNumber(content.reduce((sum, c) => sum + (c.views_count || 0), 0))}
+            color="#FF3366"
+          />
+          <StatCard
+            icon="❤️"
+            title="Total Likes"
+            value={formatNumber(content.reduce((sum, c) => sum + (c.likes_count || 0), 0))}
+            color="#4FACFE"
+          />
+          <Link to="/mlm" style={{ textDecoration: 'none' }}>
+            <StatCard
+              icon="🌳"
+              title="MLM Network"
+              value={`${mlmStats.totalReferrals} referrals`}
+              subtitle={`$${mlmStats.totalEarnings.toFixed(2)} earned`}
+              color="#43E97B"
+              clickable
+            />
+          </Link>
+          <Link to="/earnings" style={{ textDecoration: 'none' }}>
+            <StatCard
+              icon="💰"
+              title="Earnings"
+              value={`$${mlmStats.pendingCommissions.toFixed(2)}`}
+              subtitle="Pending"
+              color="#F59E0B"
+              clickable
+            />
+          </Link>
+        </div>
 
         {/* Tabs */}
-        <motion.div
-          initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          style={{
-            display: 'flex',
-            gap: '10px',
-            marginBottom: '30px',
-            borderBottom: '1px solid rgba(255,255,255,0.1)',
-            paddingBottom: '10px'
-          }}
-        >
-          {['content', 'analytics', 'settings'].map(tab => (
-            <motion.button
-              key={tab}
-              whileHover={{ y: -2 }}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: '10px 20px',
-                background: 'transparent',
-                border: 'none',
-                color: activeTab === tab ? '#ff3366' : '#888',
-                fontSize: '1.1rem',
-                cursor: 'pointer',
-                position: 'relative',
-                textTransform: 'capitalize'
-              }}
-            >
-              {tab}
-              {activeTab === tab && (
-                <motion.div
-                  layoutId="activeTab"
-                  style={{
-                    position: 'absolute',
-                    bottom: '-11px',
-                    left: 0,
-                    right: 0,
-                    height: '2px',
-                    background: 'linear-gradient(90deg, #ff3366, #4facfe)'
-                  }}
-                />
-              )}
-            </motion.button>
-          ))}
-        </motion.div>
+        <div style={{
+          display: 'flex',
+          gap: spacing.md,
+          borderBottom: '1px solid #333',
+          marginBottom: spacing.xl
+        }}>
+          <TabButton
+            active={activeTab === 'content'}
+            onClick={() => setActiveTab('content')}
+            icon="🎬"
+            label="My Content"
+          />
+          <TabButton
+            active={activeTab === 'playlists'}
+            onClick={() => setActiveTab('playlists')}
+            icon="📋"
+            label="Playlists"
+          />
+          <TabButton
+            active={activeTab === 'mlm'}
+            onClick={() => setActiveTab('mlm')}
+            icon="🌳"
+            label="MLM Network"
+          />
+          <TabButton
+            active={activeTab === 'analytics'}
+            onClick={() => setActiveTab('analytics')}
+            icon="📊"
+            label="Analytics"
+          />
+        </div>
 
-        {/* Content Tab */}
+        {/* Tab Content */}
         {activeTab === 'content' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            {/* Stats Cards */}
+          <div>
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '20px',
-              marginBottom: '40px'
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: spacing.lg
             }}>
-              {[
-                { label: 'Total Uploads', value: content.length, icon: '📤', color: '#ff3366' },
-                { label: 'Total Views', value: stats.totalViews.toLocaleString(), icon: '👁️', color: '#4facfe' },
-                { label: 'Total Likes', value: stats.totalLikes.toLocaleString(), icon: '❤️', color: '#43e97b' },
-                { label: 'Total Downloads', value: stats.totalDownloads.toLocaleString(), icon: '⬇️', color: '#f59e0b' }
-              ].map((stat, index) => (
-                <motion.div
-                  key={index}
-                  whileHover={{ y: -5 }}
-                  style={{
-                    background: 'rgba(20,20,30,0.7)',
-                    backdropFilter: 'blur(10px)',
-                    borderRadius: '20px',
-                    padding: '25px',
-                    border: '1px solid rgba(255,255,255,0.05)'
-                  }}
-                >
-                  <div style={{ fontSize: '2rem', marginBottom: '10px' }}>{stat.icon}</div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: stat.color }}>
-                    {stat.value}
-                  </div>
-                  <div style={{ color: '#888', marginTop: '5px' }}>{stat.label}</div>
-                </motion.div>
-              ))}
+              <h2 style={{ fontSize: fontSize.lg }}>Your Videos</h2>
+              <Link to="/upload">
+                <button style={{
+                  padding: `${spacing.sm} ${spacing.lg}`,
+                  background: '#FF3366',
+                  border: 'none',
+                  borderRadius: '20px',
+                  color: 'white',
+                  cursor: 'pointer'
+                }}>
+                  + Upload New
+                </button>
+              </Link>
             </div>
 
-            {/* Content Grid */}
-            <h2 style={{ marginBottom: '20px' }}>Your Uploads</h2>
-            
             {content.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                style={{
-                  textAlign: 'center',
-                  padding: '60px',
-                  background: 'rgba(20,20,30,0.5)',
-                  borderRadius: '20px'
-                }}
-              >
-                <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📤</div>
-                <h3>No uploads yet</h3>
-                <p style={{ color: '#888', marginTop: '10px', marginBottom: '20px' }}>
-                  Start sharing your creativity with the world
-                </p>
-                <Link to="/upload">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    style={{
-                      padding: '15px 40px',
-                      background: 'linear-gradient(135deg, #ff3366, #4facfe)',
-                      border: 'none',
-                      borderRadius: '30px',
-                      color: 'white',
-                      fontSize: '1.1rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Upload Your First Content
-                  </motion.button>
-                </Link>
-              </motion.div>
+              <div style={{
+                textAlign: 'center',
+                padding: spacing.xl,
+                background: '#1a1a1a',
+                borderRadius: '10px'
+              }}>
+                <p style={{ color: '#888' }}>No content yet. Start uploading!</p>
+              </div>
             ) : (
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                gap: '20px'
+                gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                gap: spacing.lg
               }}>
-                {content.map((item, index) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ y: 50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                    whileHover={{ y: -5 }}
-                    style={{
-                      background: 'rgba(20,20,30,0.7)',
-                      backdropFilter: 'blur(10px)',
-                      borderRadius: '20px',
-                      overflow: 'hidden',
-                      border: '1px solid rgba(255,255,255,0.05)',
-                      position: 'relative'
-                    }}
-                  >
-                    {/* Status Badge */}
-                    <div style={{
-                      position: 'absolute',
-                      top: '10px',
-                      right: '10px',
-                      padding: '4px 12px',
-                      background: getStatusColor(item.status),
-                      borderRadius: '20px',
-                      fontSize: '0.8rem',
-                      fontWeight: 'bold',
-                      zIndex: 2
-                    }}>
-                      {item.status}
-                    </div>
-
-                    {/* Thumbnail */}
-                    <div
-                      onClick={() => navigate(`/content/${item.id}`)}
-                      style={{
-                        height: '160px',
-                        background: item.thumbnailUrl 
-                          ? `url(${item.thumbnailUrl}) center/cover`
-                          : 'linear-gradient(135deg, #2a2a3a, #1a1a2a)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '3rem',
-                        cursor: 'pointer',
-                        position: 'relative'
-                      }}
-                    >
-                      {!item.thumbnailUrl && getIconForType(item.content_type)}
-                      
-                      {/* Type Badge */}
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '10px',
-                        left: '10px',
-                        background: 'rgba(0,0,0,0.7)',
-                        padding: '4px 8px',
-                        borderRadius: '15px',
-                        fontSize: '0.7rem'
-                      }}>
-                        {item.content_type}
-                      </div>
-                    </div>
-
-                    {/* Content Info */}
-                    <div style={{ padding: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                        <h3 style={{ 
-                          fontSize: '1.2rem',
-                          marginBottom: '5px',
-                          flex: 1
-                        }}>
-                          {item.title}
-                        </h3>
-                        
-                        {/* Actions Menu */}
-                        <div style={{ display: 'flex', gap: '5px' }}>
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => navigate(`/edit-content/${item.id}`)}
-                            style={{
-                              background: 'rgba(79,172,254,0.2)',
-                              border: 'none',
-                              color: '#4facfe',
-                              width: '30px',
-                              height: '30px',
-                              borderRadius: '50%',
-                              cursor: 'pointer',
-                              fontSize: '1rem'
-                            }}
-                          >
-                            ✎
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => {
-                              setContentToDelete(item);
-                              setShowDeleteConfirm(true);
-                            }}
-                            style={{
-                              background: 'rgba(255,51,102,0.2)',
-                              border: 'none',
-                              color: '#ff3366',
-                              width: '30px',
-                              height: '30px',
-                              borderRadius: '50%',
-                              cursor: 'pointer',
-                              fontSize: '1rem'
-                            }}
-                          >
-                            ×
-                          </motion.button>
-                        </div>
-                      </div>
-
-                      <p style={{ 
-                        color: '#888', 
-                        fontSize: '0.9rem',
-                        marginBottom: '15px',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        height: '40px'
-                      }}>
-                        {item.description}
-                      </p>
-
-                      {/* Stats Row */}
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        color: '#aaa',
-                        fontSize: '0.9rem',
-                        marginBottom: '15px'
-                      }}>
-                        <span>👁️ {item.views_count || 0}</span>
-                        <span>❤️ {item.likes_count || 0}</span>
-                        <span>⬇️ {item.downloads_count || 0}</span>
-                        <span>{item.is_free ? '🆓' : `$${item.price}`}</span>
-                      </div>
-
-                      {/* Date */}
-                      <div style={{ color: '#666', fontSize: '0.8rem' }}>
-                        Uploaded: {new Date(item.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </motion.div>
+                {content.map(item => (
+                  <ContentCard key={item.id} content={item} />
                 ))}
               </div>
             )}
-          </motion.div>
+          </div>
         )}
 
-        {/* Analytics Tab */}
-        {activeTab === 'analytics' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{
-              background: 'rgba(20,20,30,0.7)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '20px',
-              padding: '40px',
-              border: '1px solid rgba(255,255,255,0.05)'
-            }}
-          >
-            <h2 style={{ marginBottom: '30px' }}>Content Analytics</h2>
-            
-            <div style={{ display: 'grid', gap: '30px' }}>
-              {/* Performance by content type */}
-              {['video', 'music', 'game', 'image'].map(type => {
-                const typeContent = content.filter(c => c.content_type === type);
-                if (typeContent.length === 0) return null;
-
-                const typeViews = typeContent.reduce((sum, c) => sum + (c.views_count || 0), 0);
-                const typeEarnings = typeContent.reduce((sum, c) => sum + (c.price || 0), 0);
-
-                return (
-                  <div key={type}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                      <span style={{ textTransform: 'capitalize' }}>{type}</span>
-                      <span>{typeContent.length} items • {typeViews} views</span>
-                    </div>
-                    <div style={{
-                      width: '100%',
-                      height: '8px',
-                      background: 'rgba(255,255,255,0.1)',
-                      borderRadius: '4px',
-                      overflow: 'hidden'
-                    }}>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(typeContent.length / content.length) * 100}%` }}
-                        style={{
-                          height: '100%',
-                          background: 'linear-gradient(90deg, #ff3366, #4facfe)'
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+        {activeTab === 'playlists' && (
+          <div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: spacing.lg
+            }}>
+              <h2 style={{ fontSize: fontSize.lg }}>Your Playlists</h2>
             </div>
-          </motion.div>
+
+            {playlists.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: spacing.xl,
+                background: '#1a1a1a',
+                borderRadius: '10px'
+              }}>
+                <p style={{ color: '#888' }}>No playlists yet. Create one from any video!</p>
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                gap: spacing.lg
+              }}>
+                {playlists.map(playlist => (
+                  <PlaylistCard key={playlist.id} playlist={playlist} />
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{
-              background: 'rgba(20,20,30,0.7)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '20px',
-              padding: '40px',
-              border: '1px solid rgba(255,255,255,0.05)'
-            }}
-          >
-            <h2 style={{ marginBottom: '30px' }}>Profile Settings</h2>
-            
-            <div style={{ display: 'grid', gap: '20px', maxWidth: '500px' }}>
-              <div>
-                <label style={{ display: 'block', color: '#888', marginBottom: '5px' }}>Username</label>
-                <input
-                  type="text"
-                  value={profile?.username || ''}
-                  placeholder="Enter username"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '10px',
-                    color: 'white'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', color: '#888', marginBottom: '5px' }}>Email</label>
-                <input
-                  type="email"
-                  value={user?.email || ''}
-                  disabled
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '10px',
-                    color: '#666'
-                  }}
-                />
-              </div>
-
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  padding: '15px',
-                  background: 'linear-gradient(135deg, #ff3366, #4facfe)',
+        {activeTab === 'mlm' && (
+          <div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: spacing.lg
+            }}>
+              <h2 style={{ fontSize: fontSize.lg }}>MLM Network</h2>
+              <Link to="/mlm">
+                <button style={{
+                  padding: `${spacing.sm} ${spacing.lg}`,
+                  background: '#FF3366',
                   border: 'none',
-                  borderRadius: '10px',
+                  borderRadius: '20px',
                   color: 'white',
-                  fontSize: '1rem',
-                  cursor: 'pointer',
-                  marginTop: '20px'
-                }}
-              >
-                Save Changes
-              </motion.button>
+                  cursor: 'pointer'
+                }}>
+                  View Full Dashboard →
+              </button>
+              </Link>
             </div>
-          </motion.div>
+
+            <div style={{
+              background: '#1a1a1a',
+              borderRadius: '10px',
+              padding: spacing.xl,
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '3rem', marginBottom: spacing.md }}>🌳</div>
+              <h3 style={{ fontSize: fontSize.lg, marginBottom: spacing.sm }}>
+                Your MLM Network
+              </h3>
+              <p style={{ color: '#888', marginBottom: spacing.lg }}>
+                You have {mlmStats.totalReferrals} referrals earning you ${mlmStats.totalEarnings.toFixed(2)}
+              </p>
+              <Link to="/mlm">
+                <button style={{
+                  padding: `${spacing.md} ${spacing.xl}`,
+                  background: '#FF3366',
+                  border: 'none',
+                  borderRadius: '30px',
+                  color: 'white',
+                  cursor: 'pointer'
+                }}>
+                  Manage MLM Network
+                </button>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <div>
+            <h2 style={{ fontSize: fontSize.lg, marginBottom: spacing.lg }}>Analytics</h2>
+            <div style={{
+              background: '#1a1a1a',
+              borderRadius: '10px',
+              padding: spacing.xl,
+              textAlign: 'center'
+            }}>
+              <p style={{ color: '#888' }}>Detailed analytics coming soon...</p>
+            </div>
+          </div>
         )}
       </div>
-
-      {/* Delete Confirmation Modal */}
-      <AnimatePresence>
-        {showDeleteConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0,0,0,0.8)',
-              backdropFilter: 'blur(10px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000
-            }}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 50 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 50 }}
-              style={{
-                background: '#1a1a2a',
-                borderRadius: '20px',
-                padding: '40px',
-                maxWidth: '400px',
-                textAlign: 'center'
-              }}
-            >
-              <div style={{ fontSize: '4rem', marginBottom: '20px' }}>⚠️</div>
-              <h3 style={{ marginBottom: '10px' }}>Delete Content?</h3>
-              <p style={{ color: '#888', marginBottom: '30px' }}>
-                Are you sure you want to delete "{contentToDelete?.title}"? This action cannot be undone.
-              </p>
-              
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleDeleteContent}
-                  style={{
-                    flex: 1,
-                    padding: '15px',
-                    background: '#ff3366',
-                    border: 'none',
-                    borderRadius: '10px',
-                    color: 'white',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Delete
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    setShowDeleteConfirm(false);
-                    setContentToDelete(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '15px',
-                    background: 'transparent',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '10px',
-                    color: 'white',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
+  );
+};
+
+// ========== COMPONENTS WITH THEIR OWN SPACING ==========
+
+const StatCard = ({ icon, title, value, subtitle, color, clickable }) => {
+  const spacing = {
+    xs: '4px',
+    sm: '8px',
+    md: '16px'
+  };
+  
+  const fontSize = {
+    xs: '0.75rem',
+    sm: '0.875rem',
+    lg: '1.25rem'
+  };
+
+  return (
+    <motion.div
+      whileHover={clickable ? { y: -5 } : {}}
+      style={{
+        background: '#1a1a1a',
+        padding: spacing.md,
+        borderRadius: '10px',
+        borderLeft: `4px solid ${color}`,
+        cursor: clickable ? 'pointer' : 'default'
+      }}
+    >
+      <div style={{ fontSize: '2rem', marginBottom: spacing.xs }}>{icon}</div>
+      <p style={{ color: '#888', fontSize: fontSize.sm }}>{title}</p>
+      <p style={{ fontSize: fontSize.lg, fontWeight: 'bold', color }}>{value}</p>
+      {subtitle && <p style={{ color: '#888', fontSize: fontSize.xs }}>{subtitle}</p>}
+    </motion.div>
+  );
+};
+
+const TabButton = ({ active, onClick, icon, label }) => {
+  const spacing = {
+    xs: '4px',
+    sm: '8px',
+    md: '16px'
+  };
+
+  const fontSize = {
+    sm: '0.875rem',
+    md: '1rem'
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: `${spacing.sm} 0`,
+        marginRight: spacing.md,
+        background: 'none',
+        border: 'none',
+        color: active ? '#FF3366' : '#888',
+        cursor: 'pointer',
+        borderBottom: active ? '2px solid #FF3366' : 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: spacing.xs,
+        fontSize: fontSize.md
+      }}
+    >
+      <span>{icon}</span>
+      {label}
+    </button>
+  );
+};
+
+const ContentCard = ({ content }) => {
+  const navigate = useNavigate();
+  const spacing = {
+    xs: '4px',
+    sm: '8px',
+    md: '16px'
+  };
+  
+  const fontSize = {
+    xs: '0.75rem',
+    sm: '0.875rem',
+    md: '1rem'
+  };
+
+  return (
+    <motion.div
+      whileHover={{ y: -5 }}
+      onClick={() => navigate(`/content/${content.id}`)}
+      style={{
+        background: '#1a1a1a',
+        borderRadius: '10px',
+        overflow: 'hidden',
+        cursor: 'pointer'
+      }}
+    >
+      <div style={{
+        height: '140px',
+        background: content.thumbnail_url 
+          ? `url(${content.thumbnail_url}) center/cover`
+          : 'linear-gradient(135deg, #2a2a3a, #1a1a2a)'
+      }} />
+      <div style={{ padding: spacing.md }}>
+        <h3 style={{ fontSize: fontSize.md, fontWeight: '600', marginBottom: spacing.xs }}>
+          {content.title}
+        </h3>
+        <p style={{ color: '#888', fontSize: fontSize.sm }}>
+          {content.views_count || 0} views
+        </p>
+      </div>
+    </motion.div>
   );
 };
 

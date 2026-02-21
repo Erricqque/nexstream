@@ -1,191 +1,216 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useDropzone } from 'react-dropzone';
 import { supabase } from '../lib/supabase';
 
 const Upload = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  
-  // Form state
-  const [formData, setFormData] = useState({
+  const [files, setFiles] = useState([]);
+  const [thumbnails, setThumbnails] = useState([]);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [contentType, setContentType] = useState('video');
+  const [metadata, setMetadata] = useState({
     title: '',
     description: '',
-    contentType: 'video',
     category: '',
-    tags: '',
+    tags: [],
+    language: 'en',
+    ageRestriction: 'all',
+    visibility: 'public',
+    allowComments: true,
+    allowDownloads: true,
+    license: 'standard',
     price: 0,
-    isFree: true,
-    thumbnail: null,
-    file: null
+    isFree: true
   });
-
-  // Preview URLs
-  const [thumbnailPreview, setThumbnailPreview] = useState(null);
-  const [filePreview, setFilePreview] = useState(null);
-
-  // Categories based on content type
-  const categories = {
-    video: ['Gaming', 'Music', 'Education', 'Entertainment', 'Sports', 'News', 'Technology', 'Lifestyle'],
-    music: ['Pop', 'Rock', 'Hip-Hop', 'Jazz', 'Classical', 'Electronic', 'R&B', 'Country'],
-    game: ['Action', 'Adventure', 'RPG', 'Strategy', 'Sports', 'Puzzle', 'Multiplayer', 'Arcade'],
-    image: ['Photography', 'Art', 'Design', 'Illustration', '3D', 'Wallpaper'],
-    document: ['E-book', 'PDF', 'Template', 'Resource']
-  };
 
   useEffect(() => {
     checkUser();
   }, []);
 
   const checkUser = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-      setUser(user);
-    } catch (error) {
-      console.error('Error checking user:', error);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       navigate('/login');
-    } finally {
-      setLoading(false);
+      return;
     }
+    setUser(user);
+  };
+
+  const onDrop = useCallback((acceptedFiles) => {
+    const newFiles = acceptedFiles.map(file => ({
+      file,
+      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      id: Math.random().toString(36).substr(2, 9)
+    }));
+    setFiles(prev => [...prev, ...newFiles]);
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'video/*': ['.mp4', '.mov', '.avi', '.wmv', '.flv', '.mkv', '.webm'],
+      'audio/*': ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'],
+      'image/*': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'],
+      'application/zip': ['.zip', '.rar', '.7z'],
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc', '.docx'],
+      'text/plain': ['.txt']
+    },
+    maxSize: 1073741824, // 1GB
+    multiple: true
+  });
+
+  const removeFile = (id) => {
+    setFiles(prev => prev.filter(f => f.id !== id));
+  };
+
+  const generateThumbnail = async (videoFile) => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.src = URL.createObjectURL(videoFile);
+      
+      video.onloadeddata = () => {
+        video.currentTime = 1;
+      };
+      
+      video.onseeked = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/jpeg', 0.8);
+        
+        URL.revokeObjectURL(video.src);
+      };
+    });
   };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-
-    // Reset price if isFree is checked
-    if (name === 'isFree' && checked) {
-      setFormData(prev => ({ ...prev, price: 0 }));
+    
+    if (name === 'tags') {
+      setMetadata(prev => ({
+        ...prev,
+        tags: value.split(',').map(tag => tag.trim()).filter(tag => tag)
+      }));
+    } else if (name === 'isFree') {
+      setMetadata(prev => ({
+        ...prev,
+        isFree: checked,
+        price: checked ? 0 : prev.price
+      }));
+    } else {
+      setMetadata(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }));
     }
   };
 
-  const handleFileChange = (e) => {
-    const { name, files } = e.target;
-    const file = files[0];
-    
-    if (!file) return;
-
-    // Validate file size (max 500MB for videos, 100MB for others)
-    const maxSize = formData.contentType === 'video' ? 500 * 1024 * 1024 : 100 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setUploadError(`File too large. Max size: ${maxSize / (1024 * 1024)}MB`);
+  const handleUpload = async () => {
+    if (files.length === 0) {
+      setUploadError('Please select at least one file');
       return;
     }
 
-    setFormData(prev => ({ ...prev, [name]: file }));
-    setUploadError('');
-
-    // Create preview
-    if (name === 'thumbnail') {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setThumbnailPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else if (name === 'file') {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFilePreview(reader.result);
-        };
-        reader.readAsDataURL(file);
-      } else if (file.type.startsWith('video/')) {
-        setFilePreview(URL.createObjectURL(file));
-      }
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.title || !formData.description || !formData.file) {
-      setUploadError('Please fill all required fields');
+    if (!metadata.title) {
+      setUploadError('Please enter a title');
       return;
     }
 
     setUploading(true);
-    setUploadProgress(0);
     setUploadError('');
 
     try {
-      // 1. Upload file to Supabase Storage
-      const fileExt = formData.file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      const filePath = `content/${formData.contentType}/${fileName}`;
+      let uploadedCount = 0;
+      
+      for (let i = 0; i < files.length; i++) {
+        const { file } = files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}_${i}.${fileExt}`;
+        const filePath = `content/${contentType}/${fileName}`;
 
-      const { error: uploadError, data } = await supabase.storage
-        .from('content')
-        .upload(filePath, formData.file, {
-          cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            const percent = (progress.loaded / progress.total) * 100;
-            setUploadProgress(Math.round(percent));
-          }
-        });
-
-      if (uploadError) throw uploadError;
-
-      // 2. Upload thumbnail if exists
-      let thumbnailPath = null;
-      if (formData.thumbnail) {
-        const thumbExt = formData.thumbnail.name.split('.').pop();
-        const thumbName = `${user.id}/thumbnails/${Date.now()}.${thumbExt}`;
-        const { error: thumbError } = await supabase.storage
+        // Upload file
+        const { error: uploadError } = await supabase.storage
           .from('content')
-          .upload(thumbName, formData.thumbnail);
-        
-        if (!thumbError) {
-          thumbnailPath = thumbName;
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Generate thumbnail for videos
+        let thumbnailPath = null;
+        if (contentType === 'video') {
+          try {
+            const thumbnailBlob = await generateThumbnail(file);
+            const thumbFileName = `${user.id}/thumbnails/${Date.now()}_${i}.jpg`;
+            const { error: thumbError } = await supabase.storage
+              .from('content')
+              .upload(thumbFileName, thumbnailBlob);
+            
+            if (!thumbError) {
+              thumbnailPath = thumbFileName;
+            }
+          } catch (thumbError) {
+            console.error('Thumbnail generation failed:', thumbError);
+          }
         }
+
+        // Save metadata to database - using only columns that exist
+        const { error: dbError } = await supabase
+          .from('content')
+          .insert([{
+            user_id: user.id,
+            title: metadata.title,
+            description: metadata.description || '',
+            content_type: contentType,
+            category: metadata.category || 'uncategorized',
+            tags: metadata.tags || [],
+            language: metadata.language || 'en',
+            age_restriction: metadata.ageRestriction || 'all',
+            visibility: metadata.visibility || 'public',
+            allow_comments: metadata.allowComments !== false,
+            allow_downloads: metadata.allowDownloads !== false,
+            license: metadata.license || 'standard',
+            price: metadata.isFree ? 0 : (metadata.price || 0),
+            is_free: metadata.isFree,
+            file_url: filePath,
+            thumbnail_url: thumbnailPath,
+            file_size: file.size,
+            file_type: file.type,
+            status: 'approved',
+            views_count: 0,
+            likes_count: 0,
+            downloads_count: 0,
+            created_at: new Date()
+          }]);
+
+        if (dbError) {
+          console.error('Database error:', dbError);
+          throw new Error(dbError.message);
+        }
+
+        uploadedCount++;
+        setUploadProgress((uploadedCount / files.length) * 100);
       }
 
-      // 3. Get public URLs
-      const { data: { publicUrl } } = supabase.storage
-        .from('content')
-        .getPublicUrl(filePath);
-
-      const thumbnailUrl = thumbnailPath 
-        ? supabase.storage.from('content').getPublicUrl(thumbnailPath).data.publicUrl 
-        : null;
-
-      // 4. Save metadata to database
-      const { error: dbError } = await supabase
-        .from('content')
-        .insert([{
-          user_id: user.id,
-          title: formData.title,
-          description: formData.description,
-          content_type: formData.contentType,
-          category: formData.category,
-          tags: formData.tags.split(',').map(tag => tag.trim()),
-          price: formData.isFree ? 0 : formData.price,
-          is_free: formData.isFree,
-          file_url: publicUrl,
-          thumbnail_url: thumbnailUrl,
-          file_size: formData.file.size,
-          file_type: formData.file.type,
-          status: 'pending', // Needs review
-          views_count: 0,
-          likes_count: 0,
-          downloads_count: 0
-        }]);
-
-      if (dbError) throw dbError;
-
       setUploadSuccess(true);
+      
+      // Navigate to dashboard after successful upload
       setTimeout(() => {
         navigate('/dashboard');
       }, 3000);
@@ -198,504 +223,741 @@ const Upload = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: '#0a0a0f',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{
-          width: '60px',
-          height: '60px',
-          border: '4px solid #ff3366',
-          borderTopColor: 'transparent',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
-      </div>
-    );
-  }
+  const categories = {
+    video: ['Gaming', 'Music', 'Education', 'Entertainment', 'Sports', 'News', 'Technology', 'Lifestyle', 'Travel', 'Comedy'],
+    audio: ['Pop', 'Rock', 'Hip-Hop', 'Jazz', 'Classical', 'Electronic', 'R&B', 'Country', 'Reggae', 'Folk'],
+    game: ['Action', 'Adventure', 'RPG', 'Strategy', 'Sports', 'Puzzle', 'Multiplayer', 'Arcade', 'Simulation', 'Horror'],
+    image: ['Photography', 'Art', 'Design', 'Illustration', '3D', 'Wallpaper'],
+    document: ['E-book', 'PDF', 'Template', 'Resource', 'Tutorial']
+  };
+
+  const languages = [
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'it', name: 'Italian' },
+    { code: 'pt', name: 'Portuguese' },
+    { code: 'ru', name: 'Russian' },
+    { code: 'ja', name: 'Japanese' },
+    { code: 'ko', name: 'Korean' },
+    { code: 'zh', name: 'Chinese' },
+    { code: 'ar', name: 'Arabic' },
+    { code: 'hi', name: 'Hindi' },
+    { code: 'sw', name: 'Swahili' }
+  ];
+
+  const spacing = {
+    xs: '4px',
+    sm: '8px',
+    md: '16px',
+    lg: '24px',
+    xl: '32px',
+    xxl: '48px'
+  };
+
+  const fontSize = {
+    xs: '0.75rem',
+    sm: '0.875rem',
+    md: '1rem',
+    lg: '1.25rem',
+    xl: '1.5rem',
+    xxl: '2rem'
+  };
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0a0a0f',
+      background: '#0f0f0f',
       color: 'white',
-      padding: '40px 20px'
+      padding: `${spacing.xl} ${spacing.xl}`,
+      fontFamily: 'Inter, sans-serif'
     }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         {/* Header */}
         <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          style={{ marginBottom: '40px' }}
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginBottom: spacing.xl }}
         >
-          <h1 style={{ 
-            fontSize: '3rem', 
-            marginBottom: '10px',
-            background: 'linear-gradient(135deg, #ff3366, #4facfe)',
+          <h1 style={{
+            fontSize: fontSize.xxl,
+            marginBottom: spacing.xs,
+            background: 'linear-gradient(135deg, #FF3366, #4FACFE)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent'
           }}>
             Upload Content
           </h1>
           <p style={{ color: '#888' }}>
-            Share your creativity with the world. Upload videos, music, games, and more.
+            Share your creativity with the world
           </p>
         </motion.div>
 
-        {/* Upload Form */}
-        <motion.form
-          initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          onSubmit={handleSubmit}
-          style={{
-            background: 'rgba(20,20,30,0.7)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '30px',
-            padding: '40px',
-            border: '1px solid rgba(255,255,255,0.05)',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-          }}
-        >
-          {/* Progress Bar */}
-          <AnimatePresence>
-            {uploading && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                style={{
-                  marginBottom: '30px',
-                  padding: '20px',
-                  background: 'rgba(255,51,102,0.1)',
-                  borderRadius: '15px',
-                  border: '1px solid rgba(255,51,102,0.2)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span>Uploading... {uploadProgress}%</span>
-                  <span style={{ color: '#ff3366' }}>{uploadProgress}%</span>
-                </div>
-                <div style={{
-                  width: '100%',
-                  height: '6px',
-                  background: 'rgba(255,255,255,0.1)',
-                  borderRadius: '3px',
-                  overflow: 'hidden'
-                }}>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${uploadProgress}%` }}
-                    style={{
-                      height: '100%',
-                      background: 'linear-gradient(90deg, #ff3366, #4facfe)',
-                      borderRadius: '3px'
-                    }}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Success Message */}
-          <AnimatePresence>
-            {uploadSuccess && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                style={{
-                  marginBottom: '30px',
-                  padding: '20px',
-                  background: 'rgba(67, 233, 123, 0.1)',
-                  borderRadius: '15px',
-                  border: '1px solid rgba(67, 233, 123, 0.2)',
-                  textAlign: 'center'
-                }}
-              >
-                <div style={{ fontSize: '3rem', marginBottom: '10px' }}>🎉</div>
-                <h3 style={{ color: '#43e97b' }}>Upload Successful!</h3>
-                <p style={{ color: '#888' }}>Redirecting to dashboard...</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Error Message */}
-          <AnimatePresence>
-            {uploadError && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                style={{
-                  marginBottom: '30px',
-                  padding: '20px',
-                  background: 'rgba(255,51,102,0.1)',
-                  borderRadius: '15px',
-                  border: '1px solid rgba(255,51,102,0.2)',
-                  color: '#ff3366',
-                  textAlign: 'center'
-                }}
-              >
-                {uploadError}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Form Fields */}
-          <div style={{ display: 'grid', gap: '25px' }}>
-            {/* Content Type Selection */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '10px', color: '#888' }}>
-                Content Type *
-              </label>
-              <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-                {['video', 'music', 'game', 'image', 'document'].map(type => (
-                  <motion.label
-                    key={type}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    style={{
-                      padding: '10px 20px',
-                      background: formData.contentType === type 
-                        ? 'linear-gradient(135deg, #ff3366, #4facfe)'
-                        : 'rgba(255,255,255,0.05)',
-                      borderRadius: '30px',
-                      cursor: 'pointer',
-                      textTransform: 'capitalize',
-                      border: formData.contentType === type 
-                        ? 'none'
-                        : '1px solid rgba(255,255,255,0.1)'
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="contentType"
-                      value={type}
-                      checked={formData.contentType === type}
-                      onChange={handleInputChange}
-                      style={{ display: 'none' }}
-                    />
-                    {type}
-                  </motion.label>
-                ))}
-              </div>
-            </div>
-
-            {/* Title */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '10px', color: '#888' }}>
-                Title *
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                placeholder="Enter a catchy title"
-                style={{
-                  width: '100%',
-                  padding: '15px',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '10px',
-                  color: 'white',
-                  fontSize: '1rem'
-                }}
-                required
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '10px', color: '#888' }}>
-                Description *
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                placeholder="Describe your content"
-                rows="5"
-                style={{
-                  width: '100%',
-                  padding: '15px',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '10px',
-                  color: 'white',
-                  fontSize: '1rem',
-                  resize: 'vertical'
-                }}
-                required
-              />
-            </div>
-
-            {/* Category Selection */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '10px', color: '#888' }}>
-                Category *
-              </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                style={{
-                  width: '100%',
-                  padding: '15px',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '10px',
-                  color: 'white',
-                  fontSize: '1rem'
-                }}
-                required
-              >
-                <option value="">Select a category</option>
-                {categories[formData.contentType]?.map(cat => (
-                  <option key={cat} value={cat.toLowerCase()}>{cat}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tags */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '10px', color: '#888' }}>
-                Tags (comma separated)
-              </label>
-              <input
-                type="text"
-                name="tags"
-                value={formData.tags}
-                onChange={handleInputChange}
-                placeholder="e.g., gaming, tutorial, funny"
-                style={{
-                  width: '100%',
-                  padding: '15px',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '10px',
-                  color: 'white',
-                  fontSize: '1rem'
-                }}
-              />
-            </div>
-
-            {/* Price Toggle */}
-            <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  name="isFree"
-                  checked={formData.isFree}
-                  onChange={handleInputChange}
-                  style={{ width: '20px', height: '20px' }}
-                />
-                <span style={{ color: '#888' }}>Make this content free</span>
-              </label>
-            </div>
-
-            {/* Price (if not free) */}
-            {!formData.isFree && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-              >
-                <label style={{ display: 'block', marginBottom: '10px', color: '#888' }}>
-                  Price ($)
-                </label>
-                <input
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleInputChange}
-                  min="0.99"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: '200px',
-                    padding: '15px',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '10px',
-                    color: 'white',
-                    fontSize: '1rem'
-                  }}
-                />
-              </motion.div>
-            )}
-
-            {/* Thumbnail Upload */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '10px', color: '#888' }}>
-                Thumbnail Image
-              </label>
-              <div style={{
-                border: '2px dashed rgba(255,255,255,0.1)',
-                borderRadius: '20px',
-                padding: '30px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                background: thumbnailPreview ? 'none' : 'rgba(0,0,0,0.2)'
-              }}
-              onClick={() => document.getElementById('thumbnailInput').click()}
-              >
-                <input
-                  id="thumbnailInput"
-                  type="file"
-                  name="thumbnail"
-                  onChange={handleFileChange}
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                />
-                {thumbnailPreview ? (
-                  <img 
-                    src={thumbnailPreview} 
-                    alt="Thumbnail preview"
-                    style={{ maxWidth: '200px', maxHeight: '200px', borderRadius: '10px' }}
-                  />
-                ) : (
-                  <>
-                    <div style={{ fontSize: '3rem', marginBottom: '10px' }}>🖼️</div>
-                    <p>Click to upload thumbnail (optional)</p>
-                    <p style={{ color: '#888', fontSize: '0.9rem' }}>Recommended: 1280x720</p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* File Upload */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '10px', color: '#888' }}>
-                Content File *
-              </label>
-              <div style={{
-                border: '2px dashed rgba(255,51,102,0.3)',
-                borderRadius: '20px',
-                padding: '40px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                background: formData.file ? 'rgba(255,51,102,0.05)' : 'rgba(0,0,0,0.2)',
-                transition: 'all 0.3s'
-              }}
-              onClick={() => document.getElementById('fileInput').click()}
-              onMouseEnter={e => e.currentTarget.style.borderColor = '#ff3366'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,51,102,0.3)'}
-              >
-                <input
-                  id="fileInput"
-                  type="file"
-                  name="file"
-                  onChange={handleFileChange}
-                  accept={
-                    formData.contentType === 'video' ? 'video/*' :
-                    formData.contentType === 'music' ? 'audio/*' :
-                    formData.contentType === 'image' ? 'image/*' :
-                    formData.contentType === 'game' ? '.zip,.html' :
-                    '*/*'
-                  }
-                  style={{ display: 'none' }}
-                  required
-                />
-                {filePreview ? (
-                  formData.contentType === 'video' ? (
-                    <video 
-                      src={filePreview} 
-                      controls
-                      style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '10px' }}
-                    />
-                  ) : formData.contentType === 'image' ? (
-                    <img 
-                      src={filePreview} 
-                      alt="Preview"
-                      style={{ maxWidth: '300px', maxHeight: '300px', borderRadius: '10px' }}
-                    />
-                  ) : (
-                    <>
-                      <div style={{ fontSize: '4rem', marginBottom: '10px' }}>📁</div>
-                      <p>{formData.file.name}</p>
-                      <p style={{ color: '#888', fontSize: '0.9rem' }}>
-                        {(formData.file.size / (1024 * 1024)).toFixed(2)} MB
-                      </p>
-                    </>
-                  )
-                ) : (
-                  <>
-                    <div style={{ fontSize: '4rem', marginBottom: '10px' }}>
-                      {formData.contentType === 'video' ? '🎬' :
-                       formData.contentType === 'music' ? '🎵' :
-                       formData.contentType === 'game' ? '🎮' :
-                       formData.contentType === 'image' ? '🖼️' : '📄'}
-                    </div>
-                    <p>Click to upload your {formData.contentType} file</p>
-                    <p style={{ color: '#888', fontSize: '0.9rem' }}>
-                      Max size: {formData.contentType === 'video' ? '500MB' : '100MB'}
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <motion.button
-              type="submit"
-              disabled={uploading || uploadSuccess}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+        {/* Progress Steps */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: spacing.xs,
+          marginBottom: spacing.xl
+        }}>
+          {[1, 2, 3].map((step) => (
+            <div
+              key={step}
               style={{
-                padding: '20px',
-                fontSize: '1.2rem',
-                background: uploading || uploadSuccess
-                  ? 'linear-gradient(135deg, #888, #666)'
-                  : 'linear-gradient(135deg, #ff3366, #4facfe)',
-                border: 'none',
-                borderRadius: '15px',
-                color: 'white',
-                fontWeight: 'bold',
-                cursor: uploading || uploadSuccess ? 'not-allowed' : 'pointer',
-                marginTop: '20px',
-                opacity: uploading || uploadSuccess ? 0.7 : 1
+                flex: 1,
+                maxWidth: '200px',
+                textAlign: 'center'
               }}
             >
-              {uploading ? 'Uploading...' : 
-               uploadSuccess ? 'Upload Successful!' : 
-               'Upload Content'}
-            </motion.button>
-          </div>
-        </motion.form>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                background: step <= currentStep ? '#FF3366' : '#2a2a2a',
+                color: step <= currentStep ? 'white' : '#666',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto',
+                marginBottom: spacing.xs,
+                fontWeight: 'bold'
+              }}>
+                {step}
+              </div>
+              <div style={{ 
+                color: step <= currentStep ? '#FF3366' : '#666', 
+                fontSize: fontSize.sm 
+              }}>
+                {step === 1 && 'Select Files'}
+                {step === 2 && 'Add Details'}
+                {step === 3 && 'Upload'}
+              </div>
+            </div>
+          ))}
+        </div>
 
-        {/* Guidelines */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-          style={{
-            marginTop: '40px',
-            padding: '30px',
-            background: 'rgba(20,20,30,0.4)',
-            borderRadius: '20px',
-            border: '1px solid rgba(255,255,255,0.03)'
-          }}
-        >
-          <h3 style={{ marginBottom: '20px', color: '#888' }}>Upload Guidelines</h3>
-          <div style={{ display: 'grid', gap: '15px', color: '#aaa' }}>
-            <div>✅ Content must be original or you must have rights to upload</div>
-            <div>✅ No copyrighted material without permission</div>
-            <div>✅ No explicit or inappropriate content</div>
-            <div>✅ All uploads are reviewed before going public</div>
-            <div>✅ You earn 70% of all revenue from your content</div>
-          </div>
-        </motion.div>
+        {/* Step 1: File Selection */}
+        {currentStep === 1 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            {/* Content Type */}
+            <div style={{ marginBottom: spacing.lg }}>
+              <label style={{ color: '#888', display: 'block', marginBottom: spacing.sm }}>
+                Content Type
+              </label>
+              <div style={{
+                display: 'flex',
+                gap: spacing.sm,
+                flexWrap: 'wrap'
+              }}>
+                {['video', 'audio', 'image', 'game', 'document'].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setContentType(type)}
+                    style={{
+                      padding: `${spacing.sm} ${spacing.lg}`,
+                      background: contentType === type ? '#FF3366' : '#1a1a1a',
+                      border: 'none',
+                      borderRadius: '30px',
+                      color: contentType === type ? 'white' : '#888',
+                      cursor: 'pointer',
+                      textTransform: 'capitalize',
+                      fontSize: fontSize.sm
+                    }}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Dropzone */}
+            <div
+              {...getRootProps()}
+              style={{
+                border: `2px dashed ${isDragActive ? '#FF3366' : '#333'}`,
+                borderRadius: '15px',
+                padding: spacing.xxl,
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: isDragActive ? 'rgba(255,51,102,0.1)' : '#1a1a1a',
+                transition: 'all 0.3s',
+                marginBottom: spacing.lg
+              }}
+            >
+              <input {...getInputProps()} />
+              <div style={{ fontSize: '4rem', marginBottom: spacing.md }}>
+                {isDragActive ? '📂' : '📁'}
+              </div>
+              <h3 style={{ marginBottom: spacing.sm }}>
+                {isDragActive ? 'Drop files here' : 'Drag & drop files here'}
+              </h3>
+              <p style={{ color: '#888', marginBottom: spacing.sm }}>
+                or click to browse
+              </p>
+              <p style={{ color: '#666', fontSize: fontSize.xs }}>
+                Supports: MP4, MOV, MP3, JPG, PNG, ZIP, PDF (up to 1GB)
+              </p>
+            </div>
+
+            {/* File List */}
+            {files.length > 0 && (
+              <div style={{ marginBottom: spacing.lg }}>
+                <h3 style={{ marginBottom: spacing.md }}>Selected Files ({files.length})</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
+                  {files.map(file => (
+                    <div
+                      key={file.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: spacing.md,
+                        padding: spacing.md,
+                        background: '#1a1a1a',
+                        borderRadius: '8px'
+                      }}
+                    >
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        background: '#2a2a2a',
+                        borderRadius: '5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.2rem'
+                      }}>
+                        {contentType === 'video' ? '🎬' : 
+                         contentType === 'audio' ? '🎵' : 
+                         contentType === 'image' ? '🖼️' : '📄'}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 'bold' }}>{file.file.name}</div>
+                        <div style={{ color: '#888', fontSize: fontSize.xs }}>
+                          {(file.file.size / 1024 / 1024).toFixed(2)} MB
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeFile(file.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#FF3366',
+                          fontSize: fontSize.lg,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setCurrentStep(2)}
+                disabled={files.length === 0}
+                style={{
+                  padding: `${spacing.md} ${spacing.xl}`,
+                  background: files.length === 0 ? '#2a2a2a' : '#FF3366',
+                  border: 'none',
+                  borderRadius: '30px',
+                  color: files.length === 0 ? '#666' : 'white',
+                  fontSize: fontSize.md,
+                  fontWeight: '600',
+                  cursor: files.length === 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Continue to Details →
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step 2: Metadata */}
+        {currentStep === 2 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div style={{
+              background: '#1a1a1a',
+              borderRadius: '15px',
+              padding: spacing.xl,
+              marginBottom: spacing.lg
+            }}>
+              <h3 style={{ fontSize: fontSize.lg, marginBottom: spacing.lg }}>
+                Content Details
+              </h3>
+
+              {/* Title */}
+              <div style={{ marginBottom: spacing.lg }}>
+                <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                  Title *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={metadata.title}
+                  onChange={handleInputChange}
+                  placeholder="Enter a catchy title"
+                  style={{
+                    width: '100%',
+                    padding: spacing.md,
+                    background: '#2a2a2a',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: fontSize.md
+                  }}
+                />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: spacing.lg }}>
+                <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  value={metadata.description}
+                  onChange={handleInputChange}
+                  placeholder="Describe your content"
+                  rows="5"
+                  style={{
+                    width: '100%',
+                    padding: spacing.md,
+                    background: '#2a2a2a',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: fontSize.md,
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              {/* Category and Language */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: spacing.md,
+                marginBottom: spacing.lg
+              }}>
+                <div>
+                  <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                    Category
+                  </label>
+                  <select
+                    name="category"
+                    value={metadata.category}
+                    onChange={handleInputChange}
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      background: '#2a2a2a',
+                      border: '1px solid #333',
+                      borderRadius: '8px',
+                      color: 'white',
+                      fontSize: fontSize.md
+                    }}
+                  >
+                    <option value="">Select category</option>
+                    {categories[contentType]?.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                    Language
+                  </label>
+                  <select
+                    name="language"
+                    value={metadata.language}
+                    onChange={handleInputChange}
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      background: '#2a2a2a',
+                      border: '1px solid #333',
+                      borderRadius: '8px',
+                      color: 'white',
+                      fontSize: fontSize.md
+                    }}
+                  >
+                    {languages.map(lang => (
+                      <option key={lang.code} value={lang.code}>{lang.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div style={{ marginBottom: spacing.lg }}>
+                <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                  Tags (comma separated)
+                </label>
+                <input
+                  type="text"
+                  name="tags"
+                  value={metadata.tags.join(', ')}
+                  onChange={handleInputChange}
+                  placeholder="gaming, tutorial, funny, music"
+                  style={{
+                    width: '100%',
+                    padding: spacing.md,
+                    background: '#2a2a2a',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: fontSize.md
+                  }}
+                />
+              </div>
+
+              {/* Age Restriction */}
+              <div style={{ marginBottom: spacing.lg }}>
+                <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                  Age Restriction
+                </label>
+                <select
+                  name="ageRestriction"
+                  value={metadata.ageRestriction}
+                  onChange={handleInputChange}
+                  style={{
+                    width: '100%',
+                    padding: spacing.md,
+                    background: '#2a2a2a',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: fontSize.md
+                  }}
+                >
+                  <option value="all">All ages</option>
+                  <option value="13+">13+</option>
+                  <option value="18+">18+</option>
+                </select>
+              </div>
+
+              {/* Visibility */}
+              <div style={{ marginBottom: spacing.lg }}>
+                <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                  Visibility
+                </label>
+                <select
+                  name="visibility"
+                  value={metadata.visibility}
+                  onChange={handleInputChange}
+                  style={{
+                    width: '100%',
+                    padding: spacing.md,
+                    background: '#2a2a2a',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: fontSize.md
+                  }}
+                >
+                  <option value="public">Public</option>
+                  <option value="unlisted">Unlisted</option>
+                  <option value="private">Private</option>
+                </select>
+              </div>
+
+              {/* License */}
+              <div style={{ marginBottom: spacing.lg }}>
+                <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                  License
+                </label>
+                <select
+                  name="license"
+                  value={metadata.license}
+                  onChange={handleInputChange}
+                  style={{
+                    width: '100%',
+                    padding: spacing.md,
+                    background: '#2a2a2a',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: fontSize.md
+                  }}
+                >
+                  <option value="standard">Standard License</option>
+                  <option value="creative_commons">Creative Commons</option>
+                  <option value="copyright">All Rights Reserved</option>
+                </select>
+              </div>
+
+              {/* Allow Comments/Downloads */}
+              <div style={{
+                display: 'flex',
+                gap: spacing.xl,
+                marginBottom: spacing.lg
+              }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    name="allowComments"
+                    checked={metadata.allowComments}
+                    onChange={handleInputChange}
+                    style={{ width: '18px', height: '18px' }}
+                  />
+                  <span style={{ color: '#888' }}>Allow comments</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    name="allowDownloads"
+                    checked={metadata.allowDownloads}
+                    onChange={handleInputChange}
+                    style={{ width: '18px', height: '18px' }}
+                  />
+                  <span style={{ color: '#888' }}>Allow downloads</span>
+                </label>
+              </div>
+
+              {/* Monetization */}
+              <div style={{
+                padding: spacing.lg,
+                background: '#2a2a2a',
+                borderRadius: '10px'
+              }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    name="isFree"
+                    checked={metadata.isFree}
+                    onChange={handleInputChange}
+                    style={{ width: '18px', height: '18px' }}
+                  />
+                  <span style={{ color: '#888' }}>Make this content free</span>
+                </label>
+
+                {!metadata.isFree && (
+                  <div style={{ marginTop: spacing.md }}>
+                    <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                      Price ($)
+                    </label>
+                    <input
+                      type="number"
+                      name="price"
+                      value={metadata.price}
+                      onChange={handleInputChange}
+                      min="0.99"
+                      step="0.01"
+                      style={{
+                        width: '200px',
+                        padding: spacing.md,
+                        background: '#2a2a2a',
+                        border: '1px solid #333',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontSize: fontSize.md
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <button
+                onClick={() => setCurrentStep(1)}
+                style={{
+                  padding: `${spacing.md} ${spacing.xl}`,
+                  background: '#2a2a2a',
+                  border: 'none',
+                  borderRadius: '30px',
+                  color: 'white',
+                  fontSize: fontSize.md,
+                  cursor: 'pointer'
+                }}
+              >
+                ← Back
+              </button>
+              <button
+                onClick={() => setCurrentStep(3)}
+                style={{
+                  padding: `${spacing.md} ${spacing.xl}`,
+                  background: '#FF3366',
+                  border: 'none',
+                  borderRadius: '30px',
+                  color: 'white',
+                  fontSize: fontSize.md,
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Continue to Upload →
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step 3: Upload */}
+        {currentStep === 3 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div style={{
+              background: '#1a1a1a',
+              borderRadius: '15px',
+              padding: spacing.xxl,
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '4rem', marginBottom: spacing.lg }}>
+                {uploadSuccess ? '✅' : uploading ? '⏳' : '📤'}
+              </div>
+
+              <h2 style={{ fontSize: fontSize.xl, marginBottom: spacing.md }}>
+                {uploadSuccess ? 'Upload Complete!' : 
+                 uploading ? 'Uploading...' : 
+                 'Ready to Upload'}
+              </h2>
+
+              <p style={{ color: '#888', marginBottom: spacing.lg }}>
+                {uploadSuccess ? 'Your content has been uploaded successfully' :
+                 uploading ? `${files.length} file(s) being uploaded` :
+                 `You're about to upload ${files.length} file(s)`}
+              </p>
+
+              {uploading && (
+                <div style={{ marginBottom: spacing.lg }}>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    background: '#2a2a2a',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    marginBottom: spacing.sm
+                  }}>
+                    <div
+                      style={{
+                        width: `${uploadProgress}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #FF3366, #4FACFE)',
+                        transition: 'width 0.3s'
+                      }}
+                    />
+                  </div>
+                  <p style={{ color: '#FF3366' }}>{Math.round(uploadProgress)}% complete</p>
+                </div>
+              )}
+
+              {uploadError && (
+                <div style={{
+                  padding: spacing.md,
+                  background: 'rgba(255,51,102,0.1)',
+                  border: '1px solid #FF3366',
+                  borderRadius: '8px',
+                  color: '#FF3366',
+                  marginBottom: spacing.lg
+                }}>
+                  {uploadError}
+                </div>
+              )}
+
+              {!uploading && !uploadSuccess && (
+                <div style={{ display: 'flex', gap: spacing.md, justifyContent: 'center' }}>
+                  <button
+                    onClick={() => setCurrentStep(2)}
+                    style={{
+                      padding: `${spacing.md} ${spacing.xl}`,
+                      background: '#2a2a2a',
+                      border: 'none',
+                      borderRadius: '30px',
+                      color: 'white',
+                      fontSize: fontSize.md,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleUpload}
+                    style={{
+                      padding: `${spacing.md} ${spacing.xl}`,
+                      background: '#FF3366',
+                      border: 'none',
+                      borderRadius: '30px',
+                      color: 'white',
+                      fontSize: fontSize.md,
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Start Upload
+                  </button>
+                </div>
+              )}
+
+              {uploadSuccess && (
+                <div style={{ display: 'flex', gap: spacing.md, justifyContent: 'center' }}>
+                  <button
+                    onClick={() => {
+                      setFiles([]);
+                      setMetadata({
+                        title: '',
+                        description: '',
+                        category: '',
+                        tags: [],
+                        language: 'en',
+                        ageRestriction: 'all',
+                        visibility: 'public',
+                        allowComments: true,
+                        allowDownloads: true,
+                        license: 'standard',
+                        price: 0,
+                        isFree: true
+                      });
+                      setCurrentStep(1);
+                      setUploadSuccess(false);
+                    }}
+                    style={{
+                      padding: `${spacing.md} ${spacing.xl}`,
+                      background: '#2a2a2a',
+                      border: 'none',
+                      borderRadius: '30px',
+                      color: 'white',
+                      fontSize: fontSize.md,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Upload More
+                  </button>
+                  <button
+                    onClick={() => navigate('/dashboard')}
+                    style={{
+                      padding: `${spacing.md} ${spacing.xl}`,
+                      background: '#FF3366',
+                      border: 'none',
+                      borderRadius: '30px',
+                      color: 'white',
+                      fontSize: fontSize.md,
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Go to Dashboard
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );

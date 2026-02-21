@@ -1,90 +1,65 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
-import { Link } from 'react-router-dom';
-import { 
-  BarChart3, 
-  DollarSign, 
-  Package, 
-  TrendingUp,
-  Plus,
-  Edit,
-  Trash2,
-  Eye,
-  ShoppingBag
-} from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const BusinessDashboard = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [business, setBusiness] = useState(null);
-  const [products, setProducts] = useState([]);
-  const [stats, setStats] = useState({
-    totalSales: 0,
-    totalRevenue: 0,
-    platformFees: 0,
-    netEarnings: 0,
-    totalProducts: 0,
-    totalViews: 0,
-    conversionRate: 0
-  });
-  const [showAddProduct, setShowAddProduct] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    price: '',
-    category: '',
-    type: 'digital',
-    stock: -1
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [businessData, setBusinessData] = useState({
+    totalEarnings: 15420.50,
+    monthlyEarnings: 3240.80,
+    totalViews: 45231,
+    totalSubscribers: 1234,
+    mlmLevel: 3,
+    downlineCount: 45,
+    commissionRate: 10,
+    pendingPayout: 850.00
   });
 
+  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [downlineMembers, setDownlineMembers] = useState([]);
+  const [earningsHistory, setEarningsHistory] = useState([]);
+
   useEffect(() => {
-    loadBusinessData();
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    if (user) {
+      loadBusinessData();
+    } else {
+      navigate('/login');
+    }
+    return () => window.removeEventListener('resize', handleResize);
   }, [user]);
 
   const loadBusinessData = async () => {
     try {
-      // Load business profile
-      const { data: businessData } = await supabase
-        .from('business_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      setRecentTransactions([
+        { id: 1, type: 'earning', amount: 45.50, desc: 'Video views', date: '2024-01-15', status: 'completed' },
+        { id: 2, type: 'earning', amount: 23.75, desc: 'Subscription', date: '2024-01-14', status: 'completed' },
+        { id: 3, type: 'commission', amount: 12.00, desc: 'Referral commission', date: '2024-01-13', status: 'completed' },
+        { id: 4, type: 'payout', amount: -150.00, desc: 'Withdrawal', date: '2024-01-10', status: 'completed' }
+      ]);
 
-      setBusiness(businessData);
+      setDownlineMembers([
+        { id: 1, name: 'John Doe', level: 1, earnings: 1250.00, joinDate: '2023-12-01', active: true },
+        { id: 2, name: 'Jane Smith', level: 1, earnings: 980.00, joinDate: '2023-12-05', active: true },
+        { id: 3, name: 'Mike Johnson', level: 2, earnings: 450.00, joinDate: '2023-12-10', active: true },
+        { id: 4, name: 'Sarah Wilson', level: 2, earnings: 320.00, joinDate: '2023-12-15', active: false }
+      ]);
 
-      if (businessData) {
-        // Load products
-        const { data: productsData } = await supabase
-          .from('products')
-          .select('*')
-          .eq('business_id', businessData.id)
-          .order('created_at', { ascending: false });
-
-        setProducts(productsData || []);
-
-        // Load sales
-        const { data: salesData } = await supabase
-          .from('sales')
-          .select('*')
-          .eq('business_id', businessData.id);
-
-        const totalSales = salesData?.length || 0;
-        const totalRevenue = salesData?.reduce((sum, s) => sum + s.amount, 0) || 0;
-        const platformFees = salesData?.reduce((sum, s) => sum + s.platform_fee, 0) || 0;
-        const totalViews = productsData?.reduce((sum, p) => sum + (p.views || 0), 0) || 0;
-
-        setStats({
-          totalSales,
-          totalRevenue,
-          platformFees,
-          netEarnings: totalRevenue - platformFees,
-          totalProducts: productsData?.length || 0,
-          totalViews,
-          conversionRate: totalViews > 0 ? ((totalSales / totalViews) * 100).toFixed(2) : 0
-        });
-      }
+      setEarningsHistory([
+        { month: 'Jan', amount: 1240 },
+        { month: 'Feb', amount: 1560 },
+        { month: 'Mar', amount: 1890 },
+        { month: 'Apr', amount: 2240 },
+        { month: 'May', amount: 2680 },
+        { month: 'Jun', amount: 3120 }
+      ]);
     } catch (error) {
       console.error('Error loading business data:', error);
     } finally {
@@ -92,105 +67,30 @@ const BusinessDashboard = () => {
     }
   };
 
-  const handleCreateBusiness = async () => {
-    const businessName = prompt('Enter your business name:');
-    if (!businessName) return;
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: '📊' },
+    { id: 'earnings', label: 'Earnings', icon: '💰' },
+    { id: 'mlm', label: 'MLM Network', icon: '🌳' },
+    { id: 'analytics', label: 'Analytics', icon: '📈' },
+    { id: 'payouts', label: 'Payouts', icon: '💳' }
+  ];
 
-    try {
-      const { data, error } = await supabase
-        .from('business_profiles')
-        .insert([{
-          user_id: user.id,
-          business_name: businessName,
-          verification_status: 'pending'
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      setBusiness(data);
-    } catch (error) {
-      console.error('Error creating business:', error);
-      alert('Failed to create business profile');
-    }
+  const spacing = {
+    xs: '4px',
+    sm: '8px',
+    md: '16px',
+    lg: '24px',
+    xl: '32px',
+    xxl: '48px'
   };
 
-  const handleAddProduct = async () => {
-    if (!formData.title || !formData.price) {
-      alert('Title and price are required');
-      return;
-    }
-
-    try {
-      const productData = {
-        business_id: business.id,
-        title: formData.title,
-        description: formData.description,
-        price: parseFloat(formData.price),
-        category: formData.category,
-        type: formData.type,
-        stock_quantity: parseInt(formData.stock) || -1
-      };
-
-      let result;
-      if (editingProduct) {
-        result = await supabase
-          .from('products')
-          .update(productData)
-          .eq('id', editingProduct.id);
-      } else {
-        result = await supabase
-          .from('products')
-          .insert([productData]);
-      }
-
-      if (result.error) throw result.error;
-
-      setShowAddProduct(false);
-      setEditingProduct(null);
-      setFormData({ title: '', description: '', price: '', category: '', type: 'digital', stock: -1 });
-      loadBusinessData();
-    } catch (error) {
-      console.error('Error saving product:', error);
-      alert('Failed to save product');
-    }
-  };
-
-  const handleEditProduct = (product) => {
-    setEditingProduct(product);
-    setFormData({
-      title: product.title,
-      description: product.description || '',
-      price: product.price.toString(),
-      category: product.category || '',
-      type: product.type,
-      stock: product.stock_quantity?.toString() || '-1'
-    });
-    setShowAddProduct(true);
-  };
-
-  const handleDeleteProduct = async (productId) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId);
-
-      if (error) throw error;
-      loadBusinessData();
-    } catch (error) {
-      console.error('Error deleting product:', error);
-      alert('Failed to delete product');
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount || 0);
+  const fontSize = {
+    xs: '0.75rem',
+    sm: '0.875rem',
+    md: '1rem',
+    lg: '1.25rem',
+    xl: '1.5rem',
+    xxl: '2rem'
   };
 
   if (loading) {
@@ -200,62 +100,16 @@ const BusinessDashboard = () => {
         background: '#0f0f0f',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        color: 'white'
+        justifyContent: 'center'
       }}>
         <div style={{
           width: '50px',
           height: '50px',
-          border: '3px solid #ef4444',
+          border: '4px solid #FF3366',
           borderTopColor: 'transparent',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
-        }}></div>
-      </div>
-    );
-  }
-
-  if (!business) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: '#0f0f0f',
-        color: 'white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px'
-      }}>
-        <div style={{
-          background: '#1f1f1f',
-          borderRadius: '16px',
-          padding: '40px',
-          textAlign: 'center',
-          maxWidth: '400px'
-        }}>
-          <h2 style={{ marginBottom: '16px' }}>Start Your Business</h2>
-          <p style={{ color: '#888', marginBottom: '24px' }}>
-            Create a business account to start selling products and earning revenue.
-          </p>
-          <button
-            onClick={handleCreateBusiness}
-            style={{
-              padding: '12px 32px',
-              background: '#ef4444',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '1rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={e => e.target.style.transform = 'translateY(-2px)'}
-            onMouseLeave={e => e.target.style.transform = 'translateY(0)'}
-          >
-            Create Business Account
-          </button>
-        </div>
+        }} />
       </div>
     );
   }
@@ -265,415 +119,446 @@ const BusinessDashboard = () => {
       minHeight: '100vh',
       background: '#0f0f0f',
       color: 'white',
-      padding: '40px',
-      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      padding: `${spacing.xl} ${isMobile ? spacing.md : spacing.xl}`
     }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+      `}</style>
 
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '40px'
-      }}>
-        <div>
-          <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Business Dashboard</h1>
-          <p style={{ color: '#888' }}>
-            Welcome back, {business.business_name}
-            {business.verification_status === 'pending' && (
-              <span style={{
-                marginLeft: '12px',
-                padding: '4px 12px',
-                background: '#fbbf24',
-                color: 'black',
-                borderRadius: '20px',
-                fontSize: '0.8rem'
-              }}>
-                Pending Verification
-              </span>
-            )}
-          </p>
-        </div>
-        <button
-          onClick={() => setShowAddProduct(true)}
+      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
           style={{
-            padding: '12px 24px',
-            background: '#ef4444',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '1rem',
-            fontWeight: '600',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            background: 'linear-gradient(135deg, #FF3366, #4FACFE)',
+            borderRadius: '15px',
+            padding: spacing.xl,
+            marginBottom: spacing.xl
           }}
         >
-          <Plus size={20} />
-          Add Product
-        </button>
-      </div>
-
-      {/* Stats Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: '20px',
-        marginBottom: '40px'
-      }}>
-        <div style={{
-          background: '#1f1f1f',
-          borderRadius: '12px',
-          padding: '24px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <ShoppingBag size={24} color="#ef4444" />
-            <h3 style={{ margin: 0, color: '#888' }}>Total Sales</h3>
-          </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>{stats.totalSales}</p>
-        </div>
-
-        <div style={{
-          background: '#1f1f1f',
-          borderRadius: '12px',
-          padding: '24px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <DollarSign size={24} color="#10b981" />
-            <h3 style={{ margin: 0, color: '#888' }}>Revenue</h3>
-          </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0, color: '#10b981' }}>
-            {formatCurrency(stats.totalRevenue)}
-          </p>
-        </div>
-
-        <div style={{
-          background: '#1f1f1f',
-          borderRadius: '12px',
-          padding: '24px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <BarChart3 size={24} color="#fbbf24" />
-            <h3 style={{ margin: 0, color: '#888' }}>Platform Fee (45%)</h3>
-          </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0, color: '#fbbf24' }}>
-            {formatCurrency(stats.platformFees)}
-          </p>
-        </div>
-
-        <div style={{
-          background: '#1f1f1f',
-          borderRadius: '12px',
-          padding: '24px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <TrendingUp size={24} color="#3b82f6" />
-            <h3 style={{ margin: 0, color: '#888' }}>Your Earnings (55%)</h3>
-          </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0, color: '#3b82f6' }}>
-            {formatCurrency(stats.netEarnings)}
-          </p>
-        </div>
-      </div>
-
-      {/* Add/Edit Product Modal */}
-      {showAddProduct && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#1f1f1f',
-            borderRadius: '16px',
-            padding: '40px',
-            width: '100%',
-            maxWidth: '500px'
+          <h1 style={{
+            fontSize: isMobile ? fontSize.xl : fontSize.xxl,
+            marginBottom: spacing.xs
           }}>
-            <h2 style={{ marginBottom: '24px' }}>
-              {editingProduct ? 'Edit Product' : 'Add New Product'}
-            </h2>
+            Business Dashboard
+          </h1>
+          <p style={{ opacity: 0.9 }}>
+            Welcome back! Here's your business overview
+          </p>
+        </motion.div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <input
-                type="text"
-                placeholder="Product Title"
-                value={formData.title}
-                onChange={(e) => setFormData({...formData, title: e.target.value})}
-                style={{
-                  padding: '12px',
-                  background: '#2d2d2d',
-                  border: '1px solid #3d3d3d',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontSize: '1rem'
-                }}
-              />
-
-              <textarea
-                placeholder="Description"
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                rows="4"
-                style={{
-                  padding: '12px',
-                  background: '#2d2d2d',
-                  border: '1px solid #3d3d3d',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontSize: '1rem',
-                  resize: 'vertical'
-                }}
-              />
-
-              <input
-                type="number"
-                placeholder="Price ($)"
-                value={formData.price}
-                onChange={(e) => setFormData({...formData, price: e.target.value})}
-                style={{
-                  padding: '12px',
-                  background: '#2d2d2d',
-                  border: '1px solid #3d3d3d',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontSize: '1rem'
-                }}
-              />
-
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({...formData, category: e.target.value})}
-                style={{
-                  padding: '12px',
-                  background: '#2d2d2d',
-                  border: '1px solid #3d3d3d',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontSize: '1rem'
-                }}
-              >
-                <option value="">Select Category</option>
-                <option value="movies">Movies</option>
-                <option value="music">Music</option>
-                <option value="games">Games</option>
-                <option value="videos">Videos</option>
-                <option value="digital">Digital Products</option>
-                <option value="physical">Physical Products</option>
-              </select>
-
-              <select
-                value={formData.type}
-                onChange={(e) => setFormData({...formData, type: e.target.value})}
-                style={{
-                  padding: '12px',
-                  background: '#2d2d2d',
-                  border: '1px solid #3d3d3d',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontSize: '1rem'
-                }}
-              >
-                <option value="digital">Digital Product</option>
-                <option value="physical">Physical Product</option>
-                <option value="movie">Movie</option>
-                <option value="music">Music</option>
-                <option value="game">Game</option>
-                <option value="video">Video</option>
-              </select>
-
-              <input
-                type="number"
-                placeholder="Stock Quantity (-1 for unlimited)"
-                value={formData.stock}
-                onChange={(e) => setFormData({...formData, stock: e.target.value})}
-                style={{
-                  padding: '12px',
-                  background: '#2d2d2d',
-                  border: '1px solid #3d3d3d',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontSize: '1rem'
-                }}
-              />
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-                <button
-                  onClick={handleAddProduct}
-                  style={{
-                    flex: 1,
-                    padding: '14px',
-                    background: '#ef4444',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {editingProduct ? 'Update Product' : 'Add Product'}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAddProduct(false);
-                    setEditingProduct(null);
-                    setFormData({ title: '', description: '', price: '', category: '', type: 'digital', stock: -1 });
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '14px',
-                    background: 'transparent',
-                    color: 'white',
-                    border: '1px solid #3d3d3d',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Products List */}
-      <h2 style={{ marginBottom: '20px' }}>Your Products ({products.length})</h2>
-      
-      {products.length === 0 ? (
-        <div style={{
-          background: '#1f1f1f',
-          borderRadius: '12px',
-          padding: '60px',
-          textAlign: 'center'
-        }}>
-          <Package size={48} color="#888" style={{ marginBottom: '16px' }} />
-          <p style={{ color: '#888', fontSize: '1.1rem' }}>No products yet</p>
-          <p style={{ color: '#666', marginTop: '8px' }}>Click "Add Product" to start selling</p>
-        </div>
-      ) : (
+        {/* Stats Cards */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: '20px'
+          gridTemplateColumns: isMobile 
+            ? '1fr' 
+            : window.innerWidth <= 1024 
+              ? 'repeat(2, 1fr)' 
+              : 'repeat(4, 1fr)',
+          gap: spacing.md,
+          marginBottom: spacing.xl
         }}>
-          {products.map(product => (
-            <div
-              key={product.id}
+          <StatCard
+            icon="💰"
+            title="Total Earnings"
+            value={`$${businessData.totalEarnings.toLocaleString()}`}
+            subtitle={`+$${businessData.monthlyEarnings.toLocaleString()} this month`}
+            color="#FF3366"
+          />
+          <StatCard
+            icon="👁️"
+            title="Total Views"
+            value={businessData.totalViews.toLocaleString()}
+            subtitle="+12.5% vs last month"
+            color="#4FACFE"
+          />
+          <StatCard
+            icon="👥"
+            title="Subscribers"
+            value={businessData.totalSubscribers.toLocaleString()}
+            subtitle={`${businessData.downlineCount} in downline`}
+            color="#43E97B"
+          />
+          <StatCard
+            icon="📊"
+            title="MLM Level"
+            value={businessData.mlmLevel}
+            subtitle={`${businessData.commissionRate}% commission`}
+            color="#F59E0B"
+          />
+        </div>
+
+        {/* Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: spacing.sm,
+          marginBottom: spacing.xl,
+          overflowX: 'auto',
+          paddingBottom: spacing.xs,
+          borderBottom: '1px solid #333'
+        }}>
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               style={{
-                background: '#1f1f1f',
-                borderRadius: '12px',
-                padding: '20px',
-                transition: 'transform 0.2s'
+                padding: `${spacing.md} ${spacing.lg}`,
+                background: activeTab === tab.id ? '#FF3366' : 'transparent',
+                border: 'none',
+                borderRadius: '30px',
+                color: activeTab === tab.id ? 'white' : '#888',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: spacing.sm,
+                fontSize: fontSize.md,
+                whiteSpace: 'nowrap'
               }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
-              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{product.title}</h3>
-                <span style={{
-                  background: product.status === 'active' ? '#10b981' : '#6b7280',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.8rem'
-                }}>
-                  {product.status}
-                </span>
-              </div>
-
-              <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '16px', lineHeight: '1.5' }}>
-                {product.description || 'No description'}
-              </p>
-
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '16px'
-              }}>
-                <span style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#ef4444' }}>
-                  ${product.price}
-                </span>
-                <span style={{ color: '#888', fontSize: '0.9rem' }}>
-                  {product.sales_count || 0} sold
-                </span>
-              </div>
-
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: '#888',
-                fontSize: '0.9rem',
-                marginBottom: '16px'
-              }}>
-                <Eye size={16} />
-                <span>{product.views || 0} views</span>
-                {product.stock_quantity > 0 && (
-                  <>
-                    <span>•</span>
-                    <span>{product.stock_quantity} in stock</span>
-                  </>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => handleEditProduct(product)}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    background: '#2d2d2d',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: 'white',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Edit size={16} />
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDeleteProduct(product.id)}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    background: '#2d2d2d',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Trash2 size={16} />
-                  Delete
-                </button>
-              </div>
-            </div>
+              <span>{tab.icon}</span>
+              {tab.label}
+            </button>
           ))}
         </div>
-      )}
+
+        {/* Tab Content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <div>
+                {/* Earnings Chart */}
+                <div style={{
+                  background: '#1a1a1a',
+                  borderRadius: '10px',
+                  padding: spacing.xl,
+                  marginBottom: spacing.xl
+                }}>
+                  <h2 style={{ fontSize: fontSize.lg, marginBottom: spacing.lg }}>
+                    Earnings Overview
+                  </h2>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    height: '200px',
+                    gap: spacing.sm
+                  }}>
+                    {earningsHistory.map((item, i) => (
+                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{
+                          width: '100%',
+                          height: `${(item.amount / 3500) * 180}px`,
+                          background: 'linear-gradient(135deg, #FF3366, #4FACFE)',
+                          borderRadius: '5px 5px 0 0',
+                          transition: 'height 0.3s'
+                        }} />
+                        <span style={{ fontSize: fontSize.xs, color: '#888', marginTop: spacing.xs }}>
+                          {item.month}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Recent Transactions */}
+                <div style={{
+                  background: '#1a1a1a',
+                  borderRadius: '10px',
+                  padding: spacing.xl
+                }}>
+                  <h2 style={{ fontSize: fontSize.lg, marginBottom: spacing.lg }}>
+                    Recent Transactions
+                  </h2>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Description</th>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Amount</th>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Date</th>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentTransactions.map(tx => (
+                          <tr key={tx.id} style={{ borderBottom: '1px solid #333' }}>
+                            <td style={{ padding: spacing.md }}>{tx.desc}</td>
+                            <td style={{
+                              padding: spacing.md,
+                              color: tx.amount > 0 ? '#43E97B' : '#FF3366',
+                              fontWeight: 'bold'
+                            }}>
+                              {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}
+                            </td>
+                            <td style={{ padding: spacing.md, color: '#888' }}>{tx.date}</td>
+                            <td style={{ padding: spacing.md }}>
+                              <span style={{
+                                padding: `${spacing.xs} ${spacing.sm}`,
+                                background: tx.status === 'completed' ? '#43E97B' : '#F59E0B',
+                                borderRadius: '4px',
+                                fontSize: fontSize.xs,
+                                textTransform: 'capitalize'
+                              }}>
+                                {tx.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MLM Network Tab */}
+            {activeTab === 'mlm' && (
+              <div>
+                <div style={{
+                  background: '#1a1a1a',
+                  borderRadius: '10px',
+                  padding: spacing.xl,
+                  marginBottom: spacing.xl
+                }}>
+                  <h2 style={{ fontSize: fontSize.lg, marginBottom: spacing.lg }}>
+                    Your MLM Network
+                  </h2>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+                    gap: spacing.lg,
+                    marginBottom: spacing.xl
+                  }}>
+                    <div style={{
+                      padding: spacing.lg,
+                      background: '#2a2a2a',
+                      borderRadius: '8px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '2rem', marginBottom: spacing.xs }}>📊</div>
+                      <h3>Level {businessData.mlmLevel}</h3>
+                      <p style={{ color: '#888' }}>Current Level</p>
+                    </div>
+                    <div style={{
+                      padding: spacing.lg,
+                      background: '#2a2a2a',
+                      borderRadius: '8px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '2rem', marginBottom: spacing.xs }}>👥</div>
+                      <h3>{businessData.downlineCount}</h3>
+                      <p style={{ color: '#888' }}>Downline Members</p>
+                    </div>
+                    <div style={{
+                      padding: spacing.lg,
+                      background: '#2a2a2a',
+                      borderRadius: '8px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '2rem', marginBottom: spacing.xs }}>💰</div>
+                      <h3>${businessData.pendingPayout}</h3>
+                      <p style={{ color: '#888' }}>Pending Commission</p>
+                    </div>
+                  </div>
+
+                  <h3 style={{ fontSize: fontSize.md, marginBottom: spacing.md }}>
+                    Downline Members
+                  </h3>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Name</th>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Level</th>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Earnings</th>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Joined</th>
+                          <th style={{ textAlign: 'left', padding: spacing.md }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {downlineMembers.map(member => (
+                          <tr key={member.id} style={{ borderBottom: '1px solid #333' }}>
+                            <td style={{ padding: spacing.md }}>{member.name}</td>
+                            <td style={{ padding: spacing.md }}>Level {member.level}</td>
+                            <td style={{ padding: spacing.md, color: '#43E97B' }}>
+                              ${member.earnings}
+                            </td>
+                            <td style={{ padding: spacing.md, color: '#888' }}>{member.joinDate}</td>
+                            <td style={{ padding: spacing.md }}>
+                              <span style={{
+                                padding: `${spacing.xs} ${spacing.sm}`,
+                                background: member.active ? '#43E97B' : '#888',
+                                borderRadius: '4px',
+                                fontSize: fontSize.xs
+                              }}>
+                                {member.active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Payouts Tab */}
+            {activeTab === 'payouts' && (
+              <div style={{
+                background: '#1a1a1a',
+                borderRadius: '10px',
+                padding: spacing.xl
+              }}>
+                <h2 style={{ fontSize: fontSize.lg, marginBottom: spacing.lg }}>
+                  Request Payout
+                </h2>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr',
+                  gap: spacing.xl
+                }}>
+                  <div>
+                    <div style={{ marginBottom: spacing.lg }}>
+                      <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                        Amount ($)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="Enter amount"
+                        style={{
+                          width: '100%',
+                          padding: spacing.md,
+                          background: '#2a2a2a',
+                          border: '1px solid #333',
+                          borderRadius: '8px',
+                          color: 'white',
+                          fontSize: fontSize.md
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: spacing.lg }}>
+                      <label style={{ color: '#888', display: 'block', marginBottom: spacing.xs }}>
+                        Payment Method
+                      </label>
+                      <select
+                        style={{
+                          width: '100%',
+                          padding: spacing.md,
+                          background: '#2a2a2a',
+                          border: '1px solid #333',
+                          borderRadius: '8px',
+                          color: 'white',
+                          fontSize: fontSize.md
+                        }}
+                      >
+                        <option value="flutterwave">Flutterwave (Bank Transfer)</option>
+                        <option value="paypal">PayPal</option>
+                        <option value="mpesa">M-PESA</option>
+                      </select>
+                    </div>
+
+                    <button
+                      style={{
+                        width: '100%',
+                        padding: spacing.lg,
+                        background: '#FF3366',
+                        border: 'none',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontSize: fontSize.md,
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Request Payout
+                    </button>
+                  </div>
+
+                  <div style={{
+                    background: '#2a2a2a',
+                    borderRadius: '8px',
+                    padding: spacing.lg
+                  }}>
+                    <h3 style={{ fontSize: fontSize.md, marginBottom: spacing.md }}>
+                      Payout Summary
+                    </h3>
+                    <div style={{ marginBottom: spacing.md }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+                        <span style={{ color: '#888' }}>Available Balance</span>
+                        <span style={{ fontWeight: 'bold' }}>${businessData.totalEarnings}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+                        <span style={{ color: '#888' }}>Minimum Payout</span>
+                        <span>$10.00</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+                        <span style={{ color: '#888' }}>Processing Fee</span>
+                        <span>$1.50</span>
+                      </div>
+                      <div style={{
+                        borderTop: '1px solid #333',
+                        marginTop: spacing.md,
+                        paddingTop: spacing.md
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                          <span>You'll Receive</span>
+                          <span style={{ color: '#43E97B' }}>$148.50</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
+  );
+};
+
+const StatCard = ({ icon, title, value, subtitle, color }) => {
+  const spacing = {
+    xs: '4px',
+    sm: '8px',
+    md: '16px',
+    lg: '24px'
+  };
+
+  const fontSize = {
+    xs: '0.75rem',
+    sm: '0.875rem',
+    md: '1rem',
+    xl: '1.5rem'
+  };
+
+  return (
+    <motion.div
+      whileHover={{ y: -5 }}
+      style={{
+        background: '#1a1a1a',
+        padding: spacing.lg,
+        borderRadius: '10px',
+        borderLeft: `4px solid ${color}`
+      }}
+    >
+      <div style={{ fontSize: '2rem', marginBottom: spacing.xs }}>{icon}</div>
+      <p style={{ color: '#888', fontSize: fontSize.sm, marginBottom: spacing.xs }}>{title}</p>
+      <p style={{ fontSize: fontSize.xl, fontWeight: 'bold', color, marginBottom: spacing.xs }}>
+        {value}
+      </p>
+      <p style={{ color: '#666', fontSize: fontSize.xs }}>{subtitle}</p>
+    </motion.div>
   );
 };
 

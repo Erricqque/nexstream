@@ -1,185 +1,180 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
+import Comments from '../components/comments/Comments';
+import LikeButton from '../components/likes/LikeButton';
+import SubscribeButton from '../components/subscribe/SubscribeButton';
+import AddToPlaylistModal from '../components/playlists/AddToPlaylistModal';
 
 const ContentDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [content, setContent] = useState(null);
+  const [creator, setCreator] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [relatedContent, setRelatedContent] = useState([]);
-  const [user, setUser] = useState(null);
+  const [error, setError] = useState(false);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
 
   useEffect(() => {
     loadContent();
-    checkUser();
   }, [id]);
-
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-  };
 
   const loadContent = async () => {
     try {
       setLoading(true);
+      setError(false);
 
       // Get content details
-      const { data, error } = await supabase
+      const { data: contentData, error: contentError } = await supabase
         .from('content')
-        .select(`
-          *,
-          profiles:user_id (
-            username,
-            avatar_url,
-            id
-          )
-        `)
+        .select('*')
         .eq('id', id)
         .single();
 
-      if (error) throw error;
+      if (contentError) throw contentError;
+      if (!contentData) throw new Error('Content not found');
 
       // Increment view count
       await supabase
         .from('content')
-        .update({ views_count: (data.views_count || 0) + 1 })
+        .update({ views_count: (contentData.views_count || 0) + 1 })
         .eq('id', id);
 
-      // Get public URLs
-      const { data: fileData } = supabase.storage
-        .from('content')
-        .getPublicUrl(data.file_url);
+      // Get creator profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('username, avatar_url, bio, id')
+        .eq('id', contentData.user_id)
+        .single();
 
+      // Get public URL for content
+      let publicUrl = null;
+      if (contentData.file_url) {
+        const { data: fileData } = supabase.storage
+          .from('content')
+          .getPublicUrl(contentData.file_url);
+        publicUrl = fileData.publicUrl;
+        console.log('Content URL:', publicUrl);
+      }
+
+      // Get thumbnail URL
       let thumbnailUrl = null;
-      if (data.thumbnail_url) {
+      if (contentData.thumbnail_url) {
         const { data: thumbData } = supabase.storage
           .from('content')
-          .getPublicUrl(data.thumbnail_url);
+          .getPublicUrl(contentData.thumbnail_url);
         thumbnailUrl = thumbData.publicUrl;
       }
 
+      // Get avatar URL
+      let avatarUrl = null;
+      if (profileData?.avatar_url) {
+        const { data: avatarData } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(profileData.avatar_url);
+        avatarUrl = avatarData.publicUrl;
+      }
+
       setContent({
-        ...data,
-        publicUrl: fileData.publicUrl,
+        ...contentData,
+        publicUrl,
         thumbnailUrl
       });
 
-      // Load related content (same category or tags)
-      const { data: related } = await supabase
-        .from('content')
-        .select('*')
-        .neq('id', id)
-        .eq('status', 'approved')
-        .or(`category.eq.${data.category},content_type.eq.${data.content_type}`)
-        .limit(4);
-
-      setRelatedContent(related || []);
+      setCreator({
+        ...profileData,
+        avatarUrl,
+        username: profileData?.username || 'Anonymous'
+      });
 
     } catch (error) {
       console.error('Error loading content:', error);
+      setError(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownload = async () => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
-    try {
-      // Increment download count
-      await supabase
-        .from('content')
-        .update({ downloads_count: (content.downloads_count || 0) + 1 })
-        .eq('id', id);
-
-      // For non-free content, check if user has purchased
-      if (!content.is_free) {
-        // Check if user has purchased
-        const { data: purchase } = await supabase
-          .from('purchases')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('content_id', id)
-          .single();
-
-        if (!purchase) {
-          navigate(`/checkout/${id}`);
-          return;
-        }
-      }
-
-      // Download the file
-      window.open(content.publicUrl, '_blank');
-    } catch (error) {
-      console.error('Error during download:', error);
-    }
+  const formatViews = (views) => {
+    if (!views) return '0';
+    if (views >= 1000000) return `${(views / 1000000).toFixed(1)}M`;
+    if (views >= 1000) return `${(views / 1000).toFixed(1)}K`;
+    return views.toString();
   };
 
-  const getIconForType = (type) => {
-    switch(type) {
-      case 'video': return '🎬';
-      case 'music': return '🎵';
-      case 'game': return '🎮';
-      case 'image': return '🖼️';
-      case 'document': return '📄';
-      default: return '📁';
-    }
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
+  const spacing = {
+    xs: '4px',
+    sm: '8px',
+    md: '16px',
+    lg: '24px',
+    xl: '32px'
+  };
+
+  const fontSize = {
+    xs: '0.75rem',
+    sm: '0.875rem',
+    md: '1rem',
+    lg: '1.25rem',
+    xl: '1.5rem'
   };
 
   if (loading) {
     return (
       <div style={{
         minHeight: '100vh',
-        background: '#0a0a0f',
+        background: '#0f0f0f',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
         <div style={{
-          width: '60px',
-          height: '60px',
-          border: '4px solid #ff3366',
+          width: '50px',
+          height: '50px',
+          border: '4px solid #FF3366',
           borderTopColor: 'transparent',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
-        }}></div>
+        }} />
       </div>
     );
   }
 
-  if (!content) {
+  if (error || !content) {
     return (
       <div style={{
         minHeight: '100vh',
-        background: '#0a0a0f',
+        background: '#0f0f0f',
         color: 'white',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '20px'
+        flexDirection: 'column',
+        gap: spacing.lg
       }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '4rem', marginBottom: '20px' }}>😕</div>
-          <h2>Content not found</h2>
-          <Link to="/browse">
-            <button style={{
-              marginTop: '20px',
-              padding: '10px 30px',
-              background: 'linear-gradient(135deg, #ff3366, #4facfe)',
-              border: 'none',
-              borderRadius: '30px',
-              color: 'white',
-              cursor: 'pointer'
-            }}>
-              Browse Content
-            </button>
-          </Link>
-        </div>
+        <div style={{ fontSize: '4rem' }}>😕</div>
+        <h1 style={{ fontSize: fontSize.xl }}>Content not found</h1>
+        <Link to="/browse">
+          <button style={{
+            padding: `${spacing.md} ${spacing.xl}`,
+            background: '#FF3366',
+            border: 'none',
+            borderRadius: '30px',
+            color: 'white',
+            cursor: 'pointer'
+          }}>
+            Browse Content
+          </button>
+        </Link>
       </div>
     );
   }
@@ -187,329 +182,255 @@ const ContentDetail = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0a0a0f',
-      color: 'white'
+      background: '#0f0f0f',
+      color: 'white',
+      fontFamily: 'Inter, sans-serif'
     }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      {/* Hero section with thumbnail */}
-      <div style={{
-        height: '400px',
-        background: content.thumbnailUrl 
-          ? `url(${content.thumbnailUrl}) center/cover`
-          : 'linear-gradient(135deg, #ff3366, #4facfe)',
-        position: 'relative'
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'linear-gradient(0deg, #0a0a0f 0%, transparent 50%, transparent 100%)'
-        }} />
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: spacing.xl }}>
+        {/* Back Button */}
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: spacing.xs,
+            background: 'none',
+            border: 'none',
+            color: '#888',
+            fontSize: fontSize.md,
+            cursor: 'pointer',
+            marginBottom: spacing.lg
+          }}
+        >
+          ← Back
+        </button>
 
+        {/* Video Player */}
         <div style={{
-          position: 'absolute',
-          bottom: '40px',
-          left: '40px',
-          right: '40px',
-          maxWidth: '1200px',
-          margin: '0 auto'
+          position: 'relative',
+          paddingBottom: '56.25%',
+          height: 0,
+          overflow: 'hidden',
+          background: '#000',
+          borderRadius: '15px',
+          marginBottom: spacing.lg
         }}>
-          <motion.div
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-          >
+          {content.content_type === 'video' ? (
+            <video
+              src={content.publicUrl}
+              controls
+              poster={content.thumbnailUrl}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%'
+              }}
+            />
+          ) : content.content_type === 'audio' ? (
             <div style={{
-              display: 'inline-block',
-              padding: '8px 16px',
-              background: 'rgba(255,51,102,0.2)',
-              borderRadius: '30px',
-              marginBottom: '20px',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,51,102,0.3)'
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, #1a1a2a, #16213e)'
             }}>
-              {getIconForType(content.content_type)} {content.content_type}
+              <audio src={content.publicUrl} controls style={{ width: '80%' }} />
             </div>
-            <h1 style={{ fontSize: '3rem', marginBottom: '20px' }}>{content.title}</h1>
-            <div style={{ display: 'flex', gap: '20px', color: '#aaa' }}>
-              <span>By {content.profiles?.username || 'Anonymous'}</span>
-              <span>👁️ {content.views_count || 0} views</span>
-              <span>⬇️ {content.downloads_count || 0} downloads</span>
-              <span>📅 {new Date(content.created_at).toLocaleDateString()}</span>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '40px' }}>
-          {/* Left column - Description and preview */}
-          <motion.div
-            initial={{ x: -50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
+          ) : content.content_type === 'image' ? (
+            <img
+              src={content.publicUrl}
+              alt={content.title}
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain'
+              }}
+            />
+          ) : (
             <div style={{
-              background: 'rgba(20,20,30,0.7)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '20px',
-              padding: '30px',
-              border: '1px solid rgba(255,255,255,0.05)',
-              marginBottom: '30px'
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              gap: spacing.md,
+              background: '#1a1a1a'
             }}>
-              <h2 style={{ marginBottom: '20px' }}>Description</h2>
-              <p style={{ color: '#aaa', lineHeight: 1.8 }}>
-                {content.description}
-              </p>
-
-              {content.tags && content.tags.length > 0 && (
-                <div style={{ marginTop: '20px' }}>
-                  <h3 style={{ marginBottom: '10px', fontSize: '1rem', color: '#888' }}>Tags</h3>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    {content.tags.map(tag => (
-                      <span key={tag} style={{
-                        padding: '5px 12px',
-                        background: 'rgba(255,255,255,0.05)',
-                        borderRadius: '20px',
-                        fontSize: '0.9rem'
-                      }}>
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Preview based on content type */}
-            {content.content_type === 'video' && (
-              <div style={{
-                background: 'rgba(20,20,30,0.7)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '20px',
-                padding: '30px',
-                border: '1px solid rgba(255,255,255,0.05)'
-              }}>
-                <h2 style={{ marginBottom: '20px' }}>Preview</h2>
-                <video 
-                  src={content.publicUrl} 
-                  controls
-                  style={{ width: '100%', borderRadius: '10px' }}
-                />
-              </div>
-            )}
-
-            {content.content_type === 'music' && (
-              <div style={{
-                background: 'rgba(20,20,30,0.7)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '20px',
-                padding: '30px',
-                border: '1px solid rgba(255,255,255,0.05)'
-              }}>
-                <h2 style={{ marginBottom: '20px' }}>Preview</h2>
-                <audio 
-                  src={content.publicUrl} 
-                  controls
-                  style={{ width: '100%' }}
-                />
-              </div>
-            )}
-
-            {content.content_type === 'image' && (
-              <div style={{
-                background: 'rgba(20,20,30,0.7)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '20px',
-                padding: '30px',
-                border: '1px solid rgba(255,255,255,0.05)'
-              }}>
-                <h2 style={{ marginBottom: '20px' }}>Preview</h2>
-                <img 
-                  src={content.publicUrl} 
-                  alt={content.title}
-                  style={{ maxWidth: '100%', borderRadius: '10px' }}
-                />
-              </div>
-            )}
-          </motion.div>
-
-          {/* Right column - Actions and details */}
-          <motion.div
-            initial={{ x: 50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            <div style={{
-              background: 'rgba(20,20,30,0.7)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '20px',
-              padding: '30px',
-              border: '1px solid rgba(255,255,255,0.05)',
-              position: 'sticky',
-              top: '100px'
-            }}>
-              {/* Price */}
-              <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                {content.is_free ? (
-                  <>
-                    <div style={{ fontSize: '2rem', color: '#43e97b', marginBottom: '10px' }}>FREE</div>
-                    <p style={{ color: '#888' }}>No payment required</p>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontSize: '3rem', fontWeight: 'bold', marginBottom: '10px' }}>
-                      ${content.price}
-                    </div>
-                    <p style={{ color: '#888' }}>One-time purchase</p>
-                  </>
-                )}
-              </div>
-
-              {/* Action buttons */}
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleDownload}
+              <div style={{ fontSize: '4rem' }}>📄</div>
+              <h3>{content.title}</h3>
+              <a
+                href={content.publicUrl}
+                download
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
-                  width: '100%',
-                  padding: '20px',
-                  fontSize: '1.2rem',
-                  background: content.is_free
-                    ? 'linear-gradient(135deg, #43e97b, #38f9d7)'
-                    : 'linear-gradient(135deg, #ff3366, #ff6b3b)',
-                  border: 'none',
-                  borderRadius: '15px',
+                  padding: `${spacing.sm} ${spacing.lg}`,
+                  background: '#FF3366',
                   color: 'white',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  marginBottom: '15px'
+                  textDecoration: 'none',
+                  borderRadius: '30px'
                 }}
               >
-                {content.is_free ? 'Download Now' : 'Purchase & Download'}
-              </motion.button>
-
-              {!user && (
-                <p style={{ color: '#ff3366', textAlign: 'center', fontSize: '0.9rem' }}>
-                  Please <Link to="/login" style={{ color: '#4facfe' }}>login</Link> to download
-                </p>
-              )}
-
-              {/* File details */}
-              <div style={{ marginTop: '30px' }}>
-                <h3 style={{ marginBottom: '15px' }}>File Details</h3>
-                <table style={{ width: '100%', color: '#aaa' }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ padding: '8px 0' }}>Type:</td>
-                      <td style={{ textAlign: 'right' }}>{content.file_type || content.content_type}</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '8px 0' }}>Size:</td>
-                      <td style={{ textAlign: 'right' }}>
-                        {content.file_size ? `${(content.file_size / (1024 * 1024)).toFixed(2)} MB` : 'N/A'}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '8px 0' }}>Category:</td>
-                      <td style={{ textAlign: 'right', textTransform: 'capitalize' }}>{content.category}</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '8px 0' }}>Uploaded:</td>
-                      <td style={{ textAlign: 'right' }}>{new Date(content.created_at).toLocaleDateString()}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Creator info */}
-              <div style={{
-                marginTop: '30px',
-                padding: '20px',
-                background: 'rgba(0,0,0,0.3)',
-                borderRadius: '10px'
-              }}>
-                <h3 style={{ marginBottom: '10px' }}>Creator</h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                  <div style={{
-                    width: '50px',
-                    height: '50px',
-                    borderRadius: '50%',
-                    background: content.profiles?.avatar_url 
-                      ? `url(${content.profiles.avatar_url}) center/cover`
-                      : 'linear-gradient(135deg, #ff3366, #4facfe)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.5rem'
-                  }}>
-                    {!content.profiles?.avatar_url && '👤'}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 'bold' }}>{content.profiles?.username || 'Anonymous'}</div>
-                    <Link to={`/profile/${content.profiles?.id}`} style={{ color: '#4facfe', fontSize: '0.9rem' }}>
-                      View Profile
-                    </Link>
-                  </div>
-                </div>
-              </div>
+                Download File
+              </a>
             </div>
-          </motion.div>
+          )}
         </div>
 
-        {/* Related content */}
-        {relatedContent.length > 0 && (
-          <motion.div
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            style={{ marginTop: '60px' }}
-          >
-            <h2 style={{ marginBottom: '30px' }}>You might also like</h2>
+        {/* Title and Action Buttons */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: spacing.sm,
+          flexWrap: 'wrap',
+          gap: spacing.md
+        }}>
+          <h1 style={{ fontSize: fontSize.xl, flex: 1 }}>
+            {content.title}
+          </h1>
+          
+          <div style={{ display: 'flex', gap: spacing.sm }}>
+            {/* Playlist Button */}
+            <button
+              onClick={() => setShowPlaylistModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: spacing.xs,
+                background: 'none',
+                border: 'none',
+                color: '#888',
+                fontSize: fontSize.md,
+                cursor: 'pointer',
+                padding: '8px 12px',
+                borderRadius: '20px'
+              }}
+              onMouseEnter={e => e.target.style.background = '#1a1a1a'}
+              onMouseLeave={e => e.target.style.background = 'none'}
+            >
+              <span>📋</span>
+              <span>Save</span>
+            </button>
+            
+            {/* Like Button */}
+            <LikeButton contentId={id} />
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: spacing.lg,
+          flexWrap: 'wrap',
+          gap: spacing.md
+        }}>
+          <div style={{ color: '#888', fontSize: fontSize.sm }}>
+            {formatViews(content.views_count)} views • {formatDate(content.created_at)}
+          </div>
+        </div>
+
+        {/* Creator Info with Subscribe Button */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: spacing.md,
+          padding: spacing.md,
+          background: '#1a1a1a',
+          borderRadius: '10px',
+          marginBottom: spacing.lg
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: spacing.md }}>
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-              gap: '20px'
-            }}>
-              {relatedContent.map(item => (
-                <motion.div
-                  key={item.id}
-                  whileHover={{ y: -5 }}
-                  onClick={() => navigate(`/content/${item.id}`)}
-                  style={{
-                    background: 'rgba(20,20,30,0.7)',
-                    borderRadius: '15px',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    border: '1px solid rgba(255,255,255,0.05)'
-                  }}
-                >
-                  <div style={{
-                    height: '140px',
-                    background: 'linear-gradient(135deg, #2a2a3a, #1a1a2a)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '3rem'
-                  }}>
-                    {getIconForType(item.content_type)}
-                  </div>
-                  <div style={{ padding: '15px' }}>
-                    <h4 style={{ fontSize: '1rem', marginBottom: '5px' }}>{item.title}</h4>
-                    <p style={{ color: '#888', fontSize: '0.8rem' }}>
-                      👁️ {item.views_count || 0} views
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: creator?.avatarUrl 
+                ? `url(${creator.avatarUrl}) center/cover`
+                : 'linear-gradient(135deg, #FF3366, #4FACFE)'
+            }} />
+            <div>
+              <Link to={`/profile/${creator?.username}`} style={{ color: 'white', textDecoration: 'none' }}>
+                <h3 style={{ fontSize: fontSize.md }}>{creator?.username}</h3>
+              </Link>
+              {creator?.bio && (
+                <p style={{ color: '#888', fontSize: fontSize.sm, marginTop: spacing.xs }}>
+                  {creator.bio}
+                </p>
+              )}
             </div>
-          </motion.div>
+          </div>
+          <SubscribeButton channelId={creator?.id} />
+        </div>
+
+        {/* Description */}
+        {content.description && (
+          <div style={{
+            padding: spacing.lg,
+            background: '#1a1a1a',
+            borderRadius: '10px',
+            marginBottom: spacing.lg
+          }}>
+            <h3 style={{ fontSize: fontSize.md, marginBottom: spacing.sm }}>Description</h3>
+            <p style={{ color: '#ccc', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+              {content.description}
+            </p>
+          </div>
         )}
+
+        {/* Tags */}
+        {content.tags && content.tags.length > 0 && (
+          <div style={{
+            display: 'flex',
+            gap: spacing.sm,
+            flexWrap: 'wrap',
+            marginBottom: spacing.lg
+          }}>
+            {content.tags.map(tag => (
+              <span
+                key={tag}
+                style={{
+                  padding: `${spacing.xs} ${spacing.sm}`,
+                  background: '#1a1a1a',
+                  border: '1px solid #333',
+                  borderRadius: '15px',
+                  color: '#888',
+                  fontSize: fontSize.xs
+                }}
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Comments Section */}
+        <Comments contentId={id} />
+
+        {/* Add to Playlist Modal */}
+        <AddToPlaylistModal
+          isOpen={showPlaylistModal}
+          onClose={() => setShowPlaylistModal(false)}
+          contentId={id}
+        />
       </div>
     </div>
   );
