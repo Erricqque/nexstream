@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+frontend/.env
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+build/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+logs/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Supabase
+supabase/.temp
+
+# Backend
+backend/node_modules/
+backend/.env
+backend/dist/
+backend/build/
+backend/coverage/
+
+# Frontend
+frontend/node_modules/
+frontend/.env
+frontend/dist/
+frontend/build/
+frontend/coverage/
+
+# Netlify
+.netlify
+
+# Backup files
+*.bak
+*.backup

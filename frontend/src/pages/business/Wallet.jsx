@@ -1,300 +1,271 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-hot-toast';
+import { DollarSign, TrendingUp, Clock, ArrowUpRight, ArrowDownLeft, Wallet as WalletIcon } from 'lucide-react';
 
 const Wallet = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [walletData, setWalletData] = useState({
-    balance: 3240.80,
-    pending: 850.00,
-    lifetime: 15420.50,
-    withdrawn: 11329.70,
-    currency: 'USD'
+  const [wallet, setWallet] = useState({
+    balance: 0,
+    currency: 'USD',
+    pending_payouts: 0
   });
-
   const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState('week');
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handleResize);
-    if (user) {
-      loadWalletData();
-    } else {
+    if (!user) {
       navigate('/login');
+      return;
     }
-    return () => window.removeEventListener('resize', handleResize);
+    loadWalletData();
   }, [user]);
 
   const loadWalletData = async () => {
     try {
-      setTransactions([
-        { id: 1, type: 'credit', desc: 'Video Views', amount: 45.50, date: '2024-01-15', status: 'completed' },
-        { id: 2, type: 'credit', desc: 'Subscription Revenue', amount: 23.75, date: '2024-01-14', status: 'completed' },
-        { id: 3, type: 'credit', desc: 'MLM Commission', amount: 12.00, date: '2024-01-13', status: 'completed' },
-        { id: 4, type: 'debit', desc: 'Withdrawal to Bank', amount: -150.00, date: '2024-01-10', status: 'completed' },
-        { id: 5, type: 'credit', desc: 'Tip from Fan', amount: 5.50, date: '2024-01-09', status: 'completed' },
-        { id: 6, type: 'pending', desc: 'Video Views (Processing)', amount: 18.25, date: '2024-01-08', status: 'pending' }
-      ]);
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      // Fetch wallet balance
+      const walletResponse = await fetch(`/api/wallet/${user.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const walletData = await walletResponse.json();
+      
+      // Fetch transactions
+      const txResponse = await fetch(`/api/payments/transactions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const txData = await txResponse.json();
+      
+      setWallet(walletData);
+      setTransactions(txData.data || []);
     } catch (error) {
-      console.error('Error loading wallet data:', error);
+      console.error('Error loading wallet:', error);
+      // Mock data for development
+      setWallet({ balance: 1250.75, currency: 'USD', pending_payouts: 230.50 });
+      setTransactions([
+        { id: 1, amount: 50.00, type: 'deposit', status: 'completed', created_at: new Date().toISOString(), description: 'Added funds' },
+        { id: 2, amount: 25.50, type: 'earning', status: 'completed', created_at: new Date().toISOString(), description: 'Content earnings' },
+        { id: 3, amount: 100.00, type: 'withdrawal', status: 'pending', created_at: new Date().toISOString(), description: 'Withdraw to PayPal' },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const spacing = {
-    xs: '4px',
-    sm: '8px',
-    md: '16px',
-    lg: '24px',
-    xl: '32px',
-    xxl: '48px'
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
-  const fontSize = {
-    xs: '0.75rem',
-    sm: '0.875rem',
-    md: '1rem',
-    lg: '1.25rem',
-    xl: '1.5rem',
-    xxl: '2rem'
+  const formatTime = (dateString) => {
+    return new Date(dateString).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getTransactionIcon = (type) => {
+    switch(type) {
+      case 'deposit': return <ArrowDownLeft className="w-5 h-5 text-green-400" />;
+      case 'withdrawal': return <ArrowUpRight className="w-5 h-5 text-red-400" />;
+      case 'earning': return <TrendingUp className="w-5 h-5 text-blue-400" />;
+      default: return <Clock className="w-5 h-5 text-gray-400" />;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'completed': return 'text-green-400 bg-green-400/10';
+      case 'pending': return 'text-yellow-400 bg-yellow-400/10';
+      case 'failed': return 'text-red-400 bg-red-400/10';
+      default: return 'text-gray-400 bg-gray-400/10';
+    }
   };
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        background: '#0f0f0f',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{
-          width: '50px',
-          height: '50px',
-          border: '4px solid #FF3366',
-          borderTopColor: 'transparent',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }} />
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div>
       </div>
     );
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#0f0f0f',
-      color: 'white',
-      padding: `${spacing.xl} ${isMobile ? spacing.md : spacing.xl}`
-    }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-black">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-pink-600 to-purple-600 p-6">
+        <div className="max-w-6xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-2">My Wallet</h1>
+          <p className="text-white/80">Manage your earnings and transactions</p>
+        </div>
+      </div>
 
-      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: spacing.xl,
-          flexWrap: 'wrap',
-          gap: spacing.md
-        }}>
-          <div>
-            <h1 style={{
-              fontSize: isMobile ? fontSize.xl : fontSize.xxl,
-              marginBottom: spacing.xs
-            }}>
-              My Wallet
-            </h1>
-            <p style={{ color: '#888' }}>
-              Manage your earnings and withdrawals
-            </p>
-          </div>
-          <button
-            onClick={() => navigate('/business/payout')}
-            style={{
-              padding: `${spacing.md} ${spacing.xl}`,
-              background: '#FF3366',
-              border: 'none',
-              borderRadius: '30px',
-              color: 'white',
-              fontSize: fontSize.md,
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Balance Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-xl"
           >
-            Withdraw Funds
-          </button>
+            <div className="flex items-center justify-between mb-4">
+              <WalletIcon className="w-8 h-8 opacity-80" />
+              <span className="text-sm opacity-80">Available</span>
+            </div>
+            <div className="text-3xl font-bold mb-1">
+              {wallet.currency} {wallet.balance.toFixed(2)}
+            </div>
+            <p className="text-sm opacity-80">Ready to withdraw</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl p-6 text-white shadow-xl"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <Clock className="w-8 h-8 opacity-80" />
+              <span className="text-sm opacity-80">Pending</span>
+            </div>
+            <div className="text-3xl font-bold mb-1">
+              {wallet.currency} {wallet.pending_payouts.toFixed(2)}
+            </div>
+            <p className="text-sm opacity-80">Processing</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-xl"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <TrendingUp className="w-8 h-8 opacity-80" />
+              <span className="text-sm opacity-80">Total Earned</span>
+            </div>
+            <div className="text-3xl font-bold mb-1">
+              {wallet.currency} {(wallet.balance + wallet.pending_payouts).toFixed(2)}
+            </div>
+            <p className="text-sm opacity-80">Lifetime earnings</p>
+          </motion.div>
         </div>
 
-        {/* Balance Card */}
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          style={{
-            background: 'linear-gradient(135deg, #FF3366, #4FACFE)',
-            borderRadius: '20px',
-            padding: spacing.xl,
-            marginBottom: spacing.xl,
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          <div style={{
-            position: 'absolute',
-            top: '-50%',
-            right: '-10%',
-            width: '200px',
-            height: '200px',
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.1)'
-          }} />
+        {/* Action Buttons */}
+        <div className="flex gap-4 mb-8">
+          <Link to="/business/deposit">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 shadow-lg"
+            >
+              <ArrowDownLeft className="w-5 h-5" />
+              Add Money
+            </motion.button>
+          </Link>
           
-          <p style={{ fontSize: fontSize.sm, opacity: 0.9, marginBottom: spacing.sm }}>
-            Available Balance
-          </p>
-          <h2 style={{
-            fontSize: isMobile ? fontSize.xl : fontSize.xxl,
-            fontWeight: 'bold',
-            marginBottom: spacing.sm
-          }}>
-            ${walletData.balance.toFixed(2)}
-          </h2>
-          <p style={{ fontSize: fontSize.sm, opacity: 0.9 }}>
-            ≈ KES {(walletData.balance * 130).toLocaleString()} • ≈ EUR {(walletData.balance * 0.92).toFixed(2)}
-          </p>
-
-          <div style={{
-            display: 'flex',
-            gap: spacing.xl,
-            marginTop: spacing.xl,
-            flexWrap: 'wrap'
-          }}>
-            <div>
-              <p style={{ fontSize: fontSize.xs, opacity: 0.8 }}>Pending</p>
-              <p style={{ fontSize: fontSize.md, fontWeight: 'bold' }}>
-                ${walletData.pending.toFixed(2)}
-              </p>
-            </div>
-            <div>
-              <p style={{ fontSize: fontSize.xs, opacity: 0.8 }}>Lifetime Earnings</p>
-              <p style={{ fontSize: fontSize.md, fontWeight: 'bold' }}>
-                ${walletData.lifetime.toFixed(2)}
-              </p>
-            </div>
-            <div>
-              <p style={{ fontSize: fontSize.xs, opacity: 0.8 }}>Total Withdrawn</p>
-              <p style={{ fontSize: fontSize.md, fontWeight: 'bold' }}>
-                ${walletData.withdrawn.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Quick Actions */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-          gap: spacing.md,
-          marginBottom: spacing.xl
-        }}>
-          <QuickAction
-            icon="💳"
-            title="Add Payment Method"
-            desc="Link bank or mobile money"
-            onClick={() => navigate('/business/payout-settings')}
-          />
-          <QuickAction
-            icon="📊"
-            title="View Earnings"
-            desc="See your revenue breakdown"
-            onClick={() => navigate('/business/earnings')}
-          />
-          <QuickAction
-            icon="📤"
-            title="Request Payout"
-            desc="Withdraw your earnings"
-            onClick={() => navigate('/business/payout')}
-          />
+          <Link to="/business/withdraw">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 shadow-lg"
+            >
+              <ArrowUpRight className="w-5 h-5" />
+              Withdraw
+            </motion.button>
+          </Link>
         </div>
 
-        {/* Recent Transactions */}
-        <div style={{
-          background: '#1a1a1a',
-          borderRadius: '10px',
-          padding: spacing.xl
-        }}>
-          <h2 style={{ fontSize: fontSize.lg, marginBottom: spacing.lg }}>
-            Recent Transactions
-          </h2>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
-                  <th style={{ textAlign: 'left', padding: spacing.md }}>Date</th>
-                  <th style={{ textAlign: 'left', padding: spacing.md }}>Description</th>
-                  <th style={{ textAlign: 'right', padding: spacing.md }}>Amount</th>
-                  <th style={{ textAlign: 'center', padding: spacing.md }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map(tx => (
-                  <tr key={tx.id} style={{ borderBottom: '1px solid #333' }}>
-                    <td style={{ padding: spacing.md, color: '#888' }}>{tx.date}</td>
-                    <td style={{ padding: spacing.md }}>{tx.desc}</td>
-                    <td style={{
-                      padding: spacing.md,
-                      textAlign: 'right',
-                      color: tx.type === 'credit' ? '#43E97B' : tx.type === 'debit' ? '#FF3366' : '#F59E0B',
-                      fontWeight: 'bold'
-                    }}>
-                      {tx.type === 'credit' ? '+' : ''}{tx.amount.toFixed(2)}
-                    </td>
-                    <td style={{ padding: spacing.md, textAlign: 'center' }}>
-                      <span style={{
-                        padding: `${spacing.xs} ${spacing.sm}`,
-                        background: tx.status === 'completed' ? '#43E97B' : '#F59E0B',
-                        borderRadius: '4px',
-                        fontSize: fontSize.xs
-                      }}>
-                        {tx.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Transactions */}
+        <div className="bg-white/5 backdrop-blur rounded-2xl p-6 border border-white/10">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-white">Transaction History</h2>
+            <select 
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-white"
+            >
+              <option value="week">This Week</option>
+              <option value="month">This Month</option>
+              <option value="year">This Year</option>
+              <option value="all">All Time</option>
+            </select>
+          </div>
+
+          {transactions.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <WalletIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p className="text-lg">No transactions yet</p>
+              <p className="text-sm mt-2">Your transaction history will appear here</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {transactions.map((tx, index) => (
+                <motion.div
+                  key={tx.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="flex items-center justify-between p-4 bg-white/5 rounded-xl hover:bg-white/10 transition-all"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                      {getTransactionIcon(tx.type)}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white">{tx.description || tx.type}</h3>
+                      <p className="text-sm text-gray-400">
+                        {formatDate(tx.created_at)} at {formatTime(tx.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`font-bold ${
+                      tx.type === 'withdrawal' ? 'text-red-400' : 'text-green-400'
+                    }`}>
+                      {tx.type === 'withdrawal' ? '-' : '+'}${tx.amount.toFixed(2)}
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(tx.status)}`}>
+                      {tx.status}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-white">8</div>
+            <div className="text-sm text-gray-400">Total Transactions</div>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-green-400">5</div>
+            <div className="text-sm text-gray-400">Completed</div>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-yellow-400">2</div>
+            <div className="text-sm text-gray-400">Pending</div>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-blue-400">1</div>
+            <div className="text-sm text-gray-400">This Month</div>
           </div>
         </div>
       </div>
     </div>
   );
 };
-
-const QuickAction = ({ icon, title, desc, onClick }) => (
-  <motion.div
-    whileHover={{ y: -5 }}
-    onClick={onClick}
-    style={{
-      background: '#1a1a1a',
-      padding: spacing.lg,
-      borderRadius: '10px',
-      cursor: 'pointer',
-      border: '1px solid #333',
-      transition: 'all 0.2s'
-    }}
-  >
-    <div style={{ fontSize: '2rem', marginBottom: spacing.sm }}>{icon}</div>
-    <h3 style={{ fontSize: fontSize.md, marginBottom: spacing.xs }}>{title}</h3>
-    <p style={{ color: '#888', fontSize: fontSize.sm }}>{desc}</p>
-  </motion.div>
-);
 
 export default Wallet;

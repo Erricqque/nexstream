@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext';
 import Home from './pages/public/Home';
 import Login from './pages/public/Login';
 import Register from './pages/public/Register';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Content Pages
 import BrowseContent from './pages/BrowseContent';
@@ -50,8 +51,9 @@ import Earnings from './pages/business/Earnings';
 import ReferralCenter from './pages/business/ReferralCenter';
 import PayoutSettings from './pages/business/PayoutSettings';
 import Wallet from './pages/business/Wallet';
+import Withdraw from './pages/business/Withdraw';
 
-// MLM Pages (New)
+// MLM Pages
 import MLMDashboard from './pages/mlm/MLMDashboard';
 
 // Legal Pages
@@ -70,8 +72,18 @@ import Pricing from './pages/pricing/Pricing';
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 
-// AI Pages
+// AI Pages & Components
 import AIChat from './pages/AIChat';
+import AIChatWidget from './components/AIChatWidget';
+
+// ========== NEW VIRAL FEATURES IMPORTS ==========
+import TikTokFeed from './components/viral/TikTokFeed';
+import ViralChallenges from './components/viral/ViralChallenges';
+import EarningsCalculator from './components/viral/EarningsCalculator';
+import ReferralRace from './components/viral/ReferralRace';
+import MysteryBox from './components/viral/MysteryBox';
+import MarketingHooks from './components/viral/MarketingHooks';
+import QuickWins from './components/viral/QuickWins';
 
 function App() {
   return (
@@ -126,6 +138,7 @@ function App() {
           <Route path="/business/referrals" element={<ReferralCenter />} />
           <Route path="/business/payout-settings" element={<PayoutSettings />} />
           <Route path="/business/wallet" element={<Wallet />} />
+          <Route path="/business/withdraw" element={<Withdraw />} />
 
           {/* MLM Routes */}
           <Route path="/mlm" element={<MLMDashboard />} />
@@ -140,6 +153,13 @@ function App() {
           <Route path="/help" element={<HelpCenter />} />
           <Route path="/faq" element={<FAQ />} />
 
+	  // In your routes:
+         <Route path="/dashboard" element={
+         <ErrorBoundary>
+         <Dashboard />
+         </ErrorBoundary>
+          } />
+
           {/* Pricing */}
           <Route path="/pricing" element={<Pricing />} />
 
@@ -148,6 +168,13 @@ function App() {
 
           {/* AI Routes */}
           <Route path="/ai-chat" element={<AIChat />} />
+
+          {/* ========== NEW VIRAL FEATURES ROUTES ========== */}
+          <Route path="/feed" element={<TikTokFeed />} />
+          <Route path="/challenges" element={<ViralChallenges />} />
+          <Route path="/calculator" element={<EarningsCalculator />} />
+          <Route path="/race" element={<ReferralRace />} />
+          <Route path="/mystery" element={<MysteryBox />} />
 
           {/* 404 Route */}
           <Route path="*" element={
@@ -173,6 +200,13 @@ function App() {
             </div>
           } />
         </Routes>
+
+        {/* Global Components - Visible on all pages */}
+        <AIChatWidget />
+        <MarketingHooks />
+        
+        {/* Add QuickWins to dashboard only - this will be handled inside Dashboard component */}
+        
       </AuthProvider>
     </Router>
   );
